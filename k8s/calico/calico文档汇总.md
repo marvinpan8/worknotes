@@ -1,0 +1,159 @@
+https://qiankunli.github.io/2018/02/04/calico.html
+
+## calico简介
+
+Calico是一个纯3层的数据中心网络方案（也就是局域网网络方案），能够提供可控的VM、容器、裸机之间的IP通信。
+
+[洪强宁：宜信的PaaS平台基于Calico的容器网络实践](http://www.infoq.com/cn/articles/ECUG2015-PaaS-Calico)
+
+[容器网络插件 Calico 与 Contiv Netplugin深入比较](http://dockone.io/article/1935)
+
+### calico 文档使用建议
+
+GitHub [projectcalico/calico](https://github.com/projectcalico/calico)
+
+[官网](https://docs.projectcalico.org/)
+
+![官网](https://qiankunli.github.io/public/upload/docker/calico.png)
+
+1. 官网有对应各个平台的安装文档
+2. calico 版本不同，安装细节也有所不同。并且，文档中所说的版本跟calicoctl 的版本不一致。
+3. calico 最新版本v3.0 不再支持 mesos
+
+### calico 架构
+
+![img](https://qiankunli.github.io/public/upload/docker/calico_framework.png)
+
+组件构成 [Calico Architecture](https://docs.projectcalico.org/v2.6/reference/architecture/)
+
+[Basic Calico architecture overview](https://docs.projectcalico.org/v2.6/reference/private-cloud/l3-interconnect-fabric#fn:1)
+
+### calico 思想/原理
+
+[docker 容器网络方案：calico 网络模型](http://cizixs.com/2017/10/19/docker-calico-network)
+
+1. 容器的cali0 网卡和 host的 calixxx 是一对儿veth pair，通过一个花活儿，使得host 的 calixx 成为 容器实质上的默认网关。
+2. 数据包从容器流出 主机: 容器cali0 ==> host calixxx ==> 根据目的地址查询路由表，发往host eth0/enp0s8 ==> 离开host
+3. 数据包从外界流向容器： host eth0/en0s8 接收 ==> 查询路由表 ，找到calixxx ==> 容器 cali0 接收
+
+calico根据 profile/policy 生成对等的iptables rule， allow 或者 drop 流量，参见[Calico网络的原理、组网方式与使用](http://www.lijiaocn.com/%E9%A1%B9%E7%9B%AE/2017/04/11/calico-usage.html)
+
+### 熟悉bgp
+
+[calico初识](http://qiankunli.github.io/2018/02/28/bgp.html)
+
+calico 为什么使用BGP [Why BGP?](https://www.projectcalico.org/why-bgp/) In the Calico design, this would equate to tens of thousands of routers, and potentially millions of routes or end points. These numbers are not consistent with using an IGP, but do fit in the envelope for BGP, especially when we use route reflection to improve the router scaling number. calico 假设 网络中有上万个 routers，这个量级下IGP 效率不行。
+
+Each endpoint（也就是容器的cali0） can only communicate through its local vRouter（容器所在host）, and the first and last hop in any Calico packet flow is an IP router hop through a vRouter（也就是cali0 只跟 host 交互）. Each vRouter announces all of the endpoints it is attached to to all the other vRouters and other routers on the infrastructure fabric, using BGP, usually with BGP route reflectors to increase scale. （vRouter 或运行 route reflectors服务的 route彼此会交流 路由信息）
+
+一个网络凭空多了许多vRouter，需要与其它vRouter 通过bgp 同步信息，
+
+根据AS 的不同划分方式（共用一个AS/每个机架交换机一个AS/一个node一个AS，AS 内 ibgp，AS间 ebgp，ibgp 和 ebgp 的speake 路由通告规则不同），有多种组网模型，都可以实现分发路由的效果，只是适应的网络规模、架构等有所不同[IP Interconnect Fabrics in Calico](https://docs.projectcalico.org/v2.6/reference/private-cloud/l3-interconnect-fabric#fn:1)
+
+`calicoctl node status` 列出当前node 可以沟通路由规则的peer。
+
+[Dive into Calico - IP Interconnect Fabrics](http://hustcat.github.io/dive-into-calico/)
+
+### calicoctl 使用
+
+本节有calicoctl 1.6.3 为准
+
+1. The calicoctl command line interface provides a number of resource management commands to allow you to create, modify, delete, and view the different Calico resources.
+2. calicoctl 的command 分为三个部分：
+   - Resource的增删改查，包括create、replace、apply、delete、get
+   - node，start and check calico/node container.
+   - config
+   - ipam, ip 地址管理，只有两个command： release、show。release 用来手动释放一个已分配的ip
+
+问题来了， calico 中的resource 说的啥东东？[Resource Definitions](https://docs.projectcalico.org/v2.6/reference/calicoctl/resources/)
+
+1. bgp peer
+2. host endpoint
+3. ip pool
+4. node，quay.io/calico/node 容器启动时自动创建
+5. policy,
+6. profile, Calico uses an identically（同一的） named profile to represent each Docker network.calico 的每个网络都有一个同名的 profile，profile 中定义了该网络的 policy。 profile 的两个关键配置 ingress egress，即描述了哪些流量可以进来，哪些流量可以出去。
+7. workload endpoint
+
+**profile 和 policy 换一种方式描述 iptables的意思（实际效果仍然是iptables 实现，并且都采用了rule 的方式）**，描述了规则（主要是 ingress 和 egress）以及 应用规则的 endpoint。两者的区别是：
+
+1. profile与network 同名，profile的 ingress 和 egress 自动应用到 network 中的 所有endpoint上。 policy的 ingress 和 egress 应用到 符合 selector所定义的规则的 endpoint 上。
+2. profile 自动创建，policy 手动创建
+3. profile 算是一种 特殊的 policy
+
+The calicoctl commands for resource management (create, apply, delete, replace, get) all take resource manifests as input. 有点类似k8s，kubectl 操作的时候指定的是 json/yaml
+
+```
+apiVersion: v1
+kind: <type of resource>
+metadata:
+  # Identifying information
+  name: <name of resource>
+  ...
+spec:
+  # Specification of the resource
+  ... 
+```
+
+By default, Calico blocks all traffic unless it has been explicitly allowed through configuration of the globally defined policy which uses selectors to determine which subset of the policy is applied to each container based on their labels. （calico 默认会阻止所有流量，除非明确允许）
+
+## 与编排工具整合
+
+### k8s安装步骤
+
+k8s安装几个要点：
+
+1. 必选先搞懂tls [ssl证书是什么东西](http://qiankunli.github.io/2017/06/11/ssl.html)
+2. 搭建etcd集群 [如何搭建安全的ETCD集群](https://supereagle.github.io/2017/05/11/secure-etcd/)。下载tar.gz包，寻找etcd.service 模板，以systemctl启停etcd。安装etcd时不必拘泥后续对k8s和calico的支持，通用就行，忽略不必要的细节。
+3. 对于master 运行scheduler、controller-manager、apiserver 可以直接用容器的方式运行（不建议这种方式），也可以下载二进制文件执行运行（寻找相关xx.service模板，以systemctl启停）。
+
+参考文章：
+
+1. [Kubernetes 1.8.x 全手动安装教程](https://www.kubernetes.org.cn/3096.html)
+
+### mesos 安装步骤
+
+[CONFIGURING A MESOS/MARATHON CLUSTER ON UBUNTU 16.04](http://www.admintome.com/blog/configuring-a-dcos-cluster-on-ubuntu-16-04/)
+
+mesos 采用apt 方式安装会快一些
+
+### 几个基本问题
+
+1. 理论上k8s 是编排工具，calico 是网络工具，为何在calico的安装文档上，通常有k8s的存在？
+2. calico 与 k8s 集成 与calico 与 mesos 集成有何不同？单纯的与docker 集成有何不同？
+3. calico 基础服务的启动方式演化
+
+对于第一个问题
+
+1. 默认 Pod/Container 是未隔离的
+2. [Namespaces Kubernetes](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) Kubernetes supports multiple virtual clusters backed by the same physical cluster. These virtual clusters are called namespaces，也就是一个物理集群可分为多个虚拟集群。
+3. [Network Policy](https://feisky.gitbooks.io/kubernetes/concepts/network-policy.html)。当k8s想控制 namespace 之间是否可以 互通时，便要求网络组件能够根据 k8s 的指令做出反应。k8s 介入了网路，便有了和网络组件的沟通规范，就像docker和网络组件的接口一样。 正像calico github 上介绍的一样 Calico is an open source system enabling cloud native application connectivity and policy ，calico 除了支持 connectivity，还支持policy。
+
+对于第二个问题：
+
+1. 容器集群使用calico 有两种方式 [Calico Networking for Mesos](https://docs.projectcalico.org/v1.5/getting-started/mesos/)
+   1. calico 仅服务于docker，k8s/mesos 作为编排工具，不介入网络配置
+   2. calico 根据cni 模型 直接与 k8s/mesos 集成，
+2. calico 单纯的与docker 集成 和 calico 直接与k8s/mesos 集成，差异很大，前者属于cnm 模型，后者属于 cni 模型。大体来说，cnm 要求 network driver 与docker 交互。cni 则只是编排工具命令docker 创建完network namespace后，编排工具通过 提供cni接口的network tool 直接设置 network namespae。
+3. 体现在代码上
+   - 与docker集成。安装完calico后，创建容器执行`docker network create --driver calico --ipam-driver calico-ipam --subnet=192.0.2.0/24 my_net`
+   - 与k8s或mesos 直接 集成。需要下载calico与calico-ipam 工具
+
+对于第三个问题，calico的安装分为以下几个阶段
+
+1. calico 由felix（calico agent）、bgp client、bgp route reflector等组成，这些组件是下载二进制分别安装的
+2. 新版Calico服务是作为容器来运行的
+3. 将容器的启停配置为systemd service 文件，通过systemd 控制
+
+## 对calico细节的认识
+
+[docker 容器网络方案：calico 网络模型](http://cizixs.com/2017/10/19/docker-calico-network)
+
+1. `quay.io/calico/node:latest` 包括calico 功能，也包括calico docker libnetwork 驱动(`docker exec -it container bash` 查看下运行的进程)。启动该容器后，`docker network create` 创建网络，然后就可以创建容器执行了。再进一步，就可以marathon 根据json 启动执行了[Launching Tasks](https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/launching-tasks)。启动 `quay.io/calico/node:latest` 是最好做成systemd[Kubernetes 1.8.x 全手动安装教程](https://www.kubernetes.org.cn/3096.html)。
+2. [集成Docker和Calico网络](http://blog.csdn.net/jiangshouzhuang/article/details/52822125) 至少对于老版本，calico 基本服务器启动之后，有能力根据calico 提供的tool 可以直接设置一个net=none 的容器
+3. 推论 cni/calico-ipam cni/calico 是符合cni 接口的插件，调用calico 服务，配置容器
+4. calico 服务启动后，有默认ip pool，[Docker网络解决方案-Calico部署记录](http://www.cnblogs.com/kevingrace/p/6864804.html) 说明了如何修改ip pool
+
+## 其它
+
+[Calico实际应用中踩过的一些坑](http://www.jinciwei.cn/e55569.html)

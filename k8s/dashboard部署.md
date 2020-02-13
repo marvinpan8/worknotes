@@ -1,0 +1,253 @@
+## 修改配置文件
+
+将下载的 kubernetes-server-linux-amd64.tar.gz 解压后，再解压其中的 kubernetes-src.tar.gz 文件。
+
+dashboard 对应的目录是：`cluster/addons/dashboard`。
+
+### 修改dashboard-controller.yaml, 
+
+- 修改默认`image: marvinpan/kubernetes-dashboard-amd64:v1.10.1`
+- 增加 tolerations
+
+```bash
+ tolerations:
+      # Comment the following tolerations if Dashboard must not be deployed on master
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+```
+## 执行所有定义文件
+
+``` bash
+$ ls *.yaml
+dashboard-configmap.yaml  dashboard-controller.yaml  dashboard-rbac.yaml  dashboard-secret.yaml  dashboard-service.yaml
+
+$ kubectl create -f  .
+```
+## 检查校验
+```bash
+$ kubectl get all  -n kube-system
+$ kubectl cluster-info
+-------------------------
+Kubernetes master is running at https://127.0.0.1:8443
+CoreDNS is running at https://127.0.0.1:8443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+kubernetes-dashboard is running at https://127.0.0.1:8443/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+----------------------------------------------
+$ kubectl exec --namespace kube-system -it kubernetes-dashboard-d8cb77895-nxmfc  -- /dashboard --help
+----------------------------------------------
+2019/03/11 07:37:10 Starting overwatch
+Usage of /dashboard:
+      --alsologtostderr                  log to standard error as well as files
+      --api-log-level string             Level of API request logging. Should be one of 'INFO|NONE|DEBUG'. Default: 'INFO'. (default "INFO")
+      --apiserver-host string            The address of the Kubernetes Apiserver to connect to in the format of protocol://address:port, e.g., http://localhost:8080. If not specified, the assumption is that the binary runs inside a Kubernetes cluster and local discovery is attempted.
+      --authentication-mode strings      Enables authentication options that will be reflected on login screen. Supported values: token, basic. Default: token.Note that basic option should only be used if apiserver has '--authorization-mode=ABAC' and '--basic-auth-file' flags set. (default [token])
+      --auto-generate-certificates       When set to true, Dashboard will automatically generate certificates used to serve HTTPS. Default: false.
+      --bind-address ip                  The IP address on which to serve the --secure-port (set to 0.0.0.0 for all interfaces). (default 0.0.0.0)
+      --default-cert-dir string          Directory path containing '--tls-cert-file' and '--tls-key-file' files. Used also when auto-generating certificates flag is set. (default "/certs")
+      --disable-settings-authorizer      When enabled, Dashboard settings page will not require user to be logged in and authorized to access settings page.
+      --enable-insecure-login            When enabled, Dashboard login view will also be shown when Dashboard is not served over HTTPS. Default: false.
+      --enable-skip-login                When enabled, the skip button on the login page will be shown. Default: false.
+      --heapster-host string             The address of the Heapster Apiserver to connect to in the format of protocol://address:port, e.g., http://localhost:8082. If not specified, the assumption is that the binary runs inside a Kubernetes cluster and service proxy will be used.
+      --insecure-bind-address ip         The IP address on which to serve the --port (set to 0.0.0.0 for all interfaces). (default 127.0.0.1)
+      --insecure-port int                The port to listen to for incoming HTTP requests. (default 9090)
+      --kubeconfig string                Path to kubeconfig file with authorization and master location information.
+      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                   If non-empty, write log files in this directory
+      --logtostderr                      log to standard error instead of files
+      --metric-client-check-period int   Time in seconds that defines how often configured metric client health check should be run. Default: 30 seconds. (default 30)
+      --port int                         The secure port to listen to for incoming HTTPS requests. (default 8443)
+      --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
+      --system-banner string             When non-empty displays message to Dashboard users. Accepts simple HTML tags. Default: ''.
+      --system-banner-severity string    Severity of system banner. Should be one of 'INFO|WARNING|ERROR'. Default: 'INFO'. (default "INFO")
+      --tls-cert-file string             File containing the default x509 Certificate for HTTPS.
+      --tls-key-file string              File containing the default x509 private key matching --tls-cert-file.
+      --token-ttl int                    Expiration time (in seconds) of JWE tokens generated by dashboard. Default: 15 min. 0 - never expires (default 900)
+  -v, --v Level                          log level for V logs
+      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
+pflag: help requested
+command terminated with exit code 2
+
+```
+
+## 访问 dashboard
+- 通过 Ingress 访问（重点推荐）
+- 通过 kube-apiserver 访问（第二推荐）
+- 通过NodePort，只适合单节点的开发环境使用
+- 通过`kubectl proxy`访问，只能本地访问
+
+为了集群安全，从 1.7 开始，dashboard 只允许通过 https 访问，如果使用 kube proxy 则必须监听 localhost 或 127.0.0.1，对于 NodePort 没有这个限制，但是仅建议在开发环境中使用。
+
+对于不满足这些条件的登录访问，在登录成功后**浏览器不跳转，始终停在登录界面**。
+
+参考： 
+
+1. <https://github.com/kubernetes/dashboard/wiki/Accessing-Dashboard---1.7.X-and-above>
+
+2. <https://github.com/kubernetes/dashboard/issues/2540>
+
+
+
+## 浏览器访问 kube-apiserver 安全端口
+
+我们需要给浏览器生成一个 client 证书，访问 apiserver 的 6443 https 端口时使用。
+
+这里使用部署 kubectl 命令行工具时创建的 admin 证书、私钥和上面的 ca 证书，创建一个浏览器可以使用 PKCS#12/PFX 格式的证书：
+
+```bash
+openssl pkcs12 -export -out admin.pfx -inkey admin-key.pem -in admin.pem -certfile ca.pem
+```
+
+将创建的 admin.pfx 导入到系统的证书中。密码1
+
+- windows:  **导入受信任的根证书颁发机构  和 个人证书中，注意导入两次**
+
+- Mac： 导入系统证书中
+
+**重启浏览器**，再次访问，提示选择一个证书，选择 `admin`，这一次，被授权访问 kube-apiserver 的安全端口
+
+#### 客户端选择证书的原理
+
+1. 证书选择是在客户端和服务端 SSL/TLS 握手协商阶段商定的；
+1. 服务端如果要求客户端提供证书，则在握手时会向客户端发送一个它接受的 CA 列表；
+1. 客户端查找它的证书列表(一般是操作系统的证书，对于 Mac 为 keychain)，看有没有被 CA 签名的证书，如果有，则将它们提供给用户选择（证书的私钥）；
+1. 用户选择一个证书私钥，然后客户端将使用它和服务端通信；
+#### 参考
++ https://github.com/kubernetes/kubernetes/issues/31665
++ https://www.sslshopper.com/ssl-converter.html
++ https://stackoverflow.com/questions/40847638/how-chrome-browser-know-which-client-certificate-to-prompt-for-a-site
+---
+####  创建登录 token
+
+```bash
+kubectl create sa dashboard-admin -n kube-system
+kubectl create clusterrolebinding dashboard-admin --clusterrole=cluster-admin --serviceaccount=kube-system:dashboard-admin
+# 获取Token
+ADMIN_SECRET=$(kubectl get secrets -n kube-system | grep dashboard-admin | awk '{print $1}') && \
+DASHBOARD_LOGIN_TOKEN=$(kubectl describe secret -n kube-system ${ADMIN_SECRET} | grep -E '^token' | awk '{print $2}') && \
+echo ${DASHBOARD_LOGIN_TOKEN}
+```
+
+使用输出的 token 登录 Dashboard。
+
+####  重新获取token
+
+```bash
+kubectl -n kube-system describe secrets | sed -rn '/\sdashboard-admin-token-/,/^token/{/^token/s#\S+\s+##p}'
+# 或者
+kubectl get secret dashboard-admin-token-vp2f7 -o jsonpath={.data.token} -n kube-system |base64 -d
+```
+
+---
+### 使用KubeConfig 文件访问
+#### 创建使用 token 的 KubeConfig 文件
+
+``` bash
+KUBE_APISERVER="https://192.168.10.99:8443"
+# 设置集群参数
+kubectl config set-cluster kubernetes \
+  --certificate-authority=/k8s/kubernetes/ssl/ca.pem \
+  --embed-certs=true \
+  --server=${KUBE_APISERVER} \
+  --kubeconfig=dashboard.kubeconfig
+
+# 设置客户端认证参数，使用上面创建的 Token
+kubectl config set-credentials dashboard_user \
+  --token=${DASHBOARD_LOGIN_TOKEN} \
+  --kubeconfig=dashboard.kubeconfig
+
+# 设置上下文参数
+kubectl config set-context default \
+  --cluster=kubernetes \
+  --user=dashboard_user \
+  --kubeconfig=dashboard.kubeconfig
+
+# 设置默认上下文
+kubectl config use-context default --kubeconfig=dashboard.kubeconfig
+```
+
+用生成的 dashboard.kubeconfig  登录 Dashboard。
+
+##### 由于缺少 Heapster 插件，当前 dashboard 不能展示 Pod、Nodes 的 CPU、内存等统计数据和图表；
+
+## 参考
+
+1. https://github.com/kubernetes/dashboard/wiki/Access-control
+
+1. https://github.com/kubernetes/dashboard/issues/2558
+
+1. https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
+
+---
+
+## 添加普通用户访问特定namespace
+
+第一步新建一个ServiceAccount：
+
+```bash
+kubectl create sa lionfly -n weather
+```
+
+然后我们新建一个角色role-lionfly：
+
+vim role.yaml
+
+```bash
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: role-lionfly
+  namespace: weather
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "delete"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: ["extensions", "apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+```
+
+上面注意的`rules`规则：管理`pods`状语从句：`deployments`的权限。
+
+然后我们创建一个角色绑定，上面将角色的`role-lionfly`绑定到 lionfly 的`ServiceAccount`上：
+
+vim role-bind.yaml
+
+```bash
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: role-bind-lionfly
+  namespace: weather
+subjects:
+- kind: ServiceAccount
+  name: lionfly
+  namespace: weather
+roleRef:
+  kind: Role
+  name: role-lionfly
+  apiGroup: rbac.authorization.k8s.io
+```
+
+执行分别两个上面`yaml`文件：
+
+```bash
+kubectl create -f role.yaml
+kubectl create -f role-bind.yaml
+```
+
+接下来该怎么做和前面一样的，我们只需要拿到？`cnych`这个`ServiceAccount`的`token`就可以登录`Dashboard`了：
+
+```bash
+$ kubectl get secret -n weather |grep lionfly
+lionfly-token-v5z75        kubernetes.io/service-account-token   3         47m
+$ kubectl get secret lionfly-token-v5z75 -o jsonpath={.data.token} -n weather |base64 -d
+# 会生成一串很长的base64后的字符串
+```
+

@@ -1,0 +1,690 @@
+## 部署 kubelet 组件
+kublet 运行在每个 worker 节点上，接收 kube-apiserver 发送的请求，管理 Pod 容器，执行交互式命令，如 exec、run、logs 等。
+
+kublet 启动时自动向 kube-apiserver 注册节点信息，内置的 cadvisor 统计和监控节点的资源使用情况。
+
+为确保安全，本文档只开启接收 https 请求的安全端口，对请求进行认证和授权，拒绝未授权的访问(如 apiserver、heapster)。
+
+kubernetes work 节点运行如下组件：
+- docker
+- kubelet
+- kube-proxy
+- kubectl
+
+## 环境准备参照《1-环境准备》
+## 创建 kubelet bootstrap kubeconfig 文件
+``` bash
+# 在主节点控制机192.168.10.110
+cp kubeadm /k8s/kubernetes/bin/
+cd /jrtz/k8s/ssl
+# master节点是https://127.0.0.1:8443等
+# export KUBE_APISERVER=https://127.0.0.1:8443
+export KUBE_APISERVER=https://192.168.10.99:8443
+export NODE_NAMES=(vmsrv-010-112 vmsrv-010-121)
+# 去除所有注释中文行执行
+for node_name in ${NODE_NAMES[@]}
+  do
+    echo ">>> ${node_name}"
+    # 创建 token
+    export BOOTSTRAP_TOKEN=$(kubeadm token create \
+      --description kubelet-bootstrap-token \
+      --groups system:bootstrappers:${node_name} \
+      --kubeconfig ~/.kube/config)
+
+    # 设置集群参数
+    kubectl config set-cluster kubernetes \
+      --certificate-authority=/k8s/kubernetes/ssl/ca.pem \
+      --embed-certs=true \
+      --server=${KUBE_APISERVER} \
+      --kubeconfig=kubelet-bootstrap-${node_name}.kubeconfig
+
+    # 设置客户端认证参数
+    kubectl config set-credentials kubelet-bootstrap \
+      --token=${BOOTSTRAP_TOKEN} \
+      --kubeconfig=kubelet-bootstrap-${node_name}.kubeconfig
+
+    # 设置上下文参数
+    kubectl config set-context default \
+      --cluster=kubernetes \
+      --user=kubelet-bootstrap \
+      --kubeconfig=kubelet-bootstrap-${node_name}.kubeconfig
+
+    # 设置默认上下文
+    kubectl config use-context default --kubeconfig=kubelet-bootstrap-${node_name}.kubeconfig
+  done
+```
++ 证书中写入 Token 而非证书，证书后续由 kube-controller-manager 创建。
+
+查看 kubeadm 为各节点创建的 token：
+
+``` bash
+$ kubeadm token list --kubeconfig ~/.kube/config
+TOKEN                     TTL       EXPIRES                     USAGES                   DESCRIPTION               EXTRA GROUPS
+c77gx4.fofw4ir1628c6zk8   23h       2018-11-29T16:54:27+08:00   authentication,signing   kubelet-bootstrap-token   system:bootstrappers:m7-autocv-gpu01
+em63m9.g4cemcarph6gz6vg   23h       2018-11-29T16:54:32+08:00   authentication,signing   kubelet-bootstrap-token   system:bootstrappers:m7-autocv-gpu02
+mnpn4i.iqttdxlan650stmu   23h       2018-11-29T16:54:35+08:00   authentication,signing   kubelet-bootstrap-token   system:bootstrappers:m7-autocv-gpu03
+```
++ 创建的 token 有效期为 1 天，超期后将不能再被使用，且会被 kube-controller-manager 的 tokencleaner 清理(如果启用该 controller 的话)；
++ kube-apiserver 接收 kubelet 的 bootstrap token 后，将请求的 user 设置为 system:bootstrap:<Token ID>，group 设置为 system:bootstrappers；
+
+查看各 token 关联的 Secret：
+
+``` bash
+$ kubectl get secrets  -n kube-system|grep bootstrap-token
+bootstrap-token-c77gx4                           bootstrap.kubernetes.io/token         7      54s
+bootstrap-token-em63m9                           bootstrap.kubernetes.io/token         7      49s
+bootstrap-token-mnpn4i                           bootstrap.kubernetes.io/token         7      46s
+```
+
+## 分发 bootstrap kubeconfig 文件到所有节点
+```
+cp kubelet-bootstrap-vmsrv-010-110.kubeconfig /k8s/kubernetes/ssl/kubelet-bootstrap.kubeconfig
+scp kubelet-bootstrap-vmsrv-010-111.kubeconfig root@192.168.10.111:/k8s/kubernetes/ssl/kubelet-bootstrap.kubeconfig
+scp kubelet-bootstrap-vmsrv-010-120.kubeconfig root@192.168.10.120:/k8s/kubernetes/ssl/kubelet-bootstrap.kubeconfig
+scp kubelet-bootstrap-vmsrv-010-112.kubeconfig root@192.168.10.112:/k8s/kubernetes/ssl/kubelet-bootstrap.kubeconfig
+scp kubelet-bootstrap-vmsrv-010-121.kubeconfig root@192.168.10.121:/k8s/kubernetes/ssl/kubelet-bootstrap.kubeconfig
+```
+
+## 创建和分发 kubelet 参数配置文件
+
+从 v1.10 开始，kubelet **部分参数**需在配置文件中配置，`kubelet --help` 会提示：
+
+    DEPRECATED: This parameter should be set via the config file specified by the Kubelet's --config flag
+
+创建 kubelet 参数配置模板文件：
+
+``` bash
+cd /jrtz/k8s/ssl
+# Pod 网段，建议 /16 段地址，部署前路由不可达，部署后集群内路由可达(flanneld/calico 保证)
+POD_CIDR="172.30.0.0/16"
+# 集群 DNS 域名（末尾不带点号）
+export CLUSTER_DNS_DOMAIN="cluster.local"
+# 集群 DNS 服务 IP (从 SERVICE_CIDR 中预分配)
+export CLUSTER_DNS_SVC_IP="10.254.0.2"
+---------------------------------------------
+cat <<EOF | tee kubelet-config.yaml.template
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    enabled: true
+  x509:
+    clientCAFile: "/k8s/kubernetes/ssl/ca.pem"
+authorization:
+  mode: Webhook
+clusterDomain: "${CLUSTER_DNS_DOMAIN}"
+clusterDNS:
+  - "${CLUSTER_DNS_SVC_IP}"
+podCIDR: "${POD_CIDR}"
+maxPods: 220
+serializeImagePulls: false
+hairpinMode: promiscuous-bridge
+cgroupDriver: cgroupfs
+runtimeRequestTimeout: "15m"
+rotateCertificates: true
+serverTLSBootstrap: true
+readOnlyPort: 0
+port: 10250
+address: "##NODE_IP##"
+EOF
+```
++ address：API 监听地址，不能为 127.0.0.1，否则 kube-apiserver、heapster 等不能调用 kubelet 的 API；
++ readOnlyPort=0：关闭只读端口(默认 10255)，等效为未指定；
++ authentication.anonymous.enabled：设置为 false，不允许匿名访问 10250 端口；
++ authentication.x509.clientCAFile：指定签名客户端证书的 CA 证书，开启 HTTP 证书认证；
++ authentication.webhook.enabled=true：开启 HTTPs bearer token 认证；
++ 对于未通过 x509 证书和 webhook 认证的请求(kube-apiserver 或其他客户端)，将被拒绝，提示 Unauthorized；
++ authroization.mode=Webhook：kubelet 使用 SubjectAccessReview API 查询 kube-apiserver 某 user、group 是否具有操作资源的权限(RBAC)；
++ featureGates.RotateKubeletClientCertificate、featureGates.RotateKubeletServerCertificate：自动 rotate 证书，证书的有效期取决于 kube-controller-manager 的 --experimental-cluster-signing-duration 参数；
++ 需要 root 账户运行；
+
+为各节点创建和分发 kubelet 配置文件：
+``` bash
+cd /jrtz/k8s/ssl
+export NODE_IPS=(192.168.10.112 192.168.10.121)
+for node_ip in ${NODE_IPS[@]}
+  do 
+    echo ">>> ${node_ip}"
+    sed -e "s/##NODE_IP##/${node_ip}/" kubelet-config.yaml.template > kubelet-config-${node_ip}.yaml.template
+    scp kubelet-config-${node_ip}.yaml.template root@${node_ip}:/k8s/kubernetes/ssl/kubelet-config.yaml
+    scp ca.pem root@${node_ip}:/k8s/kubernetes/ssl/
+    rm -f kubelet-config-${node_ip}.yaml.template
+  done
+```
+## 创建和分发 kubelet systemd unit 文件
+
+创建 kubelet systemd unit 文件模板，**注意：kubelet.kubeconfig为自动创建**
+
+``` bash
+cd /jrtz/k8s/cfg
+mkdir -p /k8s/kubernetes/cert
+# k8s 各组件数据目录
+export K8S_DIR="/data/k8s/k8s"
+-----------------------------------------
+cat << EOF | tee kubelet.service.template
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=${K8S_DIR}/kubelet
+ExecStart=/k8s/kubernetes/bin/kubelet \\
+  --network-plugin=cni \\
+  --root-dir=${K8S_DIR}/kubelet \\
+  --bootstrap-kubeconfig=/k8s/kubernetes/ssl/kubelet-bootstrap.kubeconfig \\
+  --cert-dir=/k8s/kubernetes/cert \\
+  --kubeconfig=/k8s/kubernetes/ssl/kubelet.kubeconfig \\
+  --config=/k8s/kubernetes/ssl/kubelet-config.yaml \\
+  --hostname-override=##NODE_IP## \\
+  --pod-infra-container-image=gcr.io/google-containers/pause-amd64:3.1 \\
+  --allow-privileged=true \\
+  --image-pull-progress-deadline=30m \\
+  --logtostderr=true \\
+  --v=2
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
++ **如果设置了 `--hostname-override` 选项，则 `kube-proxy` 也需要设置该选项**，否则会出现找不到 Node 的情况；
++ `--network-plugin=cni`:   calico必须要有这个配置
++ `--bootstrap-kubeconfig`：指向 bootstrap kubeconfig 文件，kubelet 使用该文件中的用户名和 token 向 kube-apiserver 发送 TLS Bootstrapping 请求；
++ K8S approve kubelet 的 csr 请求后，在 `--cert-dir` 目录创建证书和私钥文件，然后写入 `--kubeconfig` 文件；
++ `--pod-infra-container-image` 不使用 redhat 的 `pod-infrastructure:latest` 镜像，它不能回收容器的僵尸；
+
+为各节点创建和分发 kubelet systemd unit 文件：
+
+``` bash
+cd /jrtz/k8s/cfg
+export K8S_DIR="/data/k8s/k8s"
+export NODE_IPS=(192.168.10.112 192.168.10.121)
+for node_ip in ${NODE_IPS[@]}
+  do 
+    echo ">>> ${node_ip}"
+    ssh root@${node_ip} "mkdir -p ${K8S_DIR}/kubelet /k8s/kubernetes/cert"
+    sed -e "s/##NODE_IP##/${node_ip}/" kubelet.service.template > kubelet-${node_ip}.service
+    scp kubelet-${node_ip}.service root@${node_ip}:/etc/systemd/system/kubelet.service
+    rm -f kubelet-${node_ip}.service
+  done
+```
+## Bootstrap Token Auth 和授予权限
+
+kublet 启动时查找配置的 --kubeletconfig 文件是否存在，如果不存在则使用 --bootstrap-kubeconfig 向 kube-apiserver 发送证书签名请求 (CSR)。
+
+kube-apiserver 收到 CSR 请求后，对其中的 Token 进行认证（事先使用 kubeadm 创建的 token），认证通过后将请求的 user 设置为 system:bootstrap:<Token ID>，group 设置为 system:bootstrappers，这一过程称为 Bootstrap Token Auth。
+
+默认情况下，这个 user 和 group 没有创建 CSR 的权限，kubelet 启动失败，错误日志如下：
+
+``` bash
+$ sudo journalctl -u kubelet -a |grep -A 2 'certificatesigningrequests'
+May 06 06:42:36 m7-autocv-gpu01 kubelet[26986]: F0506 06:42:36.314378   26986 server.go:233] failed to run Kubelet: cannot create certificate signing request: certificatesigningrequests.certificates.k8s.io is forbidden: User "system:bootstrap:lemy40" cannot create certificatesigningrequests.certificates.k8s.io at the cluster scope
+May 06 06:42:36 m7-autocv-gpu01 systemd[1]: kubelet.service: Main process exited, code=exited, status=255/n/a
+May 06 06:42:36 m7-autocv-gpu01 systemd[1]: kubelet.service: Failed with result 'exit-code'.
+```
+
+解决办法是：创建一个 clusterrolebinding，将 group system:bootstrappers 和 clusterrole system:node-bootstrapper 绑定：
+
+``` bash
+$ kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --group=system:bootstrappers
+```
+
+## 启动 kubelet 服务
+
+``` bash
+export K8S_DIR="/data/k8s/k8s"
+export NODE_IPS=(192.168.10.112 192.168.10.121)
+for node_ip in ${NODE_IPS[@]}
+  do
+    echo ">>> ${node_ip}"
+    scp /jrtz/k8s/bin/kubelet root@${node_ip}:/k8s/kubernetes/bin/
+    ssh root@${node_ip} "mkdir -p ${K8S_DIR}/kubelet"
+    ssh root@${node_ip} "/usr/sbin/swapoff -a"
+    ssh root@${node_ip} "systemctl daemon-reload && systemctl enable kubelet && systemctl restart kubelet"
+  done
+```
++ 必须创建工作目录；
++ 关闭 swap 分区，否则 kubelet 会启动失败；
+
+```bash
+$ journalctl -u kubelet -f -n 500
+$ journalctl -u kubelet |tail
+--------------------------------------
+8月 15 12:16:49 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:49.578598    7807 feature_gate.go:230] feature gates: &{map[RotateKubeletClientCertificate:true RotateKubeletServerCertificate:true]}
+8月 15 12:16:49 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:49.578698    7807 feature_gate.go:230] feature gates: &{map[RotateKubeletClientCertificate:true RotateKubeletServerCertificate:true]}
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.205871    7807 mount_linux.go:214] Detected OS with systemd
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.205939    7807 server.go:408] Version: v1.11.2
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.206013    7807 feature_gate.go:230] feature gates: &{map[RotateKubeletClientCertificate:true RotateKubeletServerCertificate:true]}
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.206101    7807 feature_gate.go:230] feature gates: &{map[RotateKubeletServerCertificate:true RotateKubeletClientCertificate:true]}
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.206217    7807 plugins.go:97] No cloud provider specified.
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.206237    7807 server.go:524] No cloud provider specified: "" from the config file: ""
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.206264    7807 bootstrap.go:56] Using bootstrap kubeconfig to generate TLS client cert, key and kubeconfig file
+8月 15 12:16:50 m7-autocv-gpu01 kubelet[7807]: I0815 12:16:50.208628    7807 bootstrap.go:86] No valid private key and/or certificate found, reusing existing private key or creating a new one
+```
+
+kubelet 启动后使用 --bootstrap-kubeconfig 向 kube-apiserver 发送 CSR 请求，当这个 CSR 被 approve 后，kube-controller-manager 为 kubelet 创建 TLS 客户端证书、私钥和 --kubeletconfig 文件。
+
+注意：kube-controller-manager 需要配置 `--cluster-signing-cert-file` 和 `--cluster-signing-key-file` 参数，才会为 TLS Bootstrap 创建证书和私钥。
+
+``` bash
+$ kubectl get csr
+NAME                                                   AGE       REQUESTOR                 CONDITION
+node-csr--BjlTzxB5Y4op_6wYlDKbbQj1NtX-IOBMLmWhkupEWA   22s       system:bootstrap:8galm1   Pending
+node-csr-a68FhmUgprTJkaLwnJOLQLOkDQuAviDdBy91ByVtWt0   28s       system:bootstrap:4ef7hj   Pending
+node-csr-a7DI6d0QjBiPh58IBGYFPUKAZvKs6sfbqlnoc22erRs   27s       system:bootstrap:ai162m   Pending
+
+$ kubectl get nodes
+No resources found.
+```
++ 三个 work 节点的 csr 均处于 pending 状态；
+
+## 自动 approve CSR 请求
+
+创建三个 ClusterRoleBinding，分别用于自动 approve client、renew client、renew server 证书：
+
+``` bash
+cd /jrtz/k8s/ssl
+cat << EOF | tee csr-crb.yaml 
+ # Approve all CSRs for the group "system:bootstrappers"
+ kind: ClusterRoleBinding
+ apiVersion: rbac.authorization.k8s.io/v1
+ metadata:
+   name: auto-approve-csrs-for-group
+ subjects:
+ - kind: Group
+   name: system:bootstrappers
+   apiGroup: rbac.authorization.k8s.io
+ roleRef:
+   kind: ClusterRole
+   name: system:certificates.k8s.io:certificatesigningrequests:nodeclient
+   apiGroup: rbac.authorization.k8s.io
+---
+ # To let a node of the group "system:nodes" renew its own credentials
+ kind: ClusterRoleBinding
+ apiVersion: rbac.authorization.k8s.io/v1
+ metadata:
+   name: node-client-cert-renewal
+ subjects:
+ - kind: Group
+   name: system:nodes
+   apiGroup: rbac.authorization.k8s.io
+ roleRef:
+   kind: ClusterRole
+   name: system:certificates.k8s.io:certificatesigningrequests:selfnodeclient
+   apiGroup: rbac.authorization.k8s.io
+---
+# A ClusterRole which instructs the CSR approver to approve a node requesting a
+# serving cert matching its client cert.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: approve-node-server-renewal-csr
+rules:
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests/selfnodeserver"]
+  verbs: ["create"]
+---
+ # To let a node of the group "system:nodes" renew its own server credentials
+ kind: ClusterRoleBinding
+ apiVersion: rbac.authorization.k8s.io/v1
+ metadata:
+   name: node-server-cert-renewal
+ subjects:
+ - kind: Group
+   name: system:nodes
+   apiGroup: rbac.authorization.k8s.io
+ roleRef:
+   kind: ClusterRole
+   name: approve-node-server-renewal-csr
+   apiGroup: rbac.authorization.k8s.io
+EOF
+```
++ auto-approve-csrs-for-group：自动 approve node 的第一次 CSR； 注意第一次 CSR 时，请求的 Group 为 system:bootstrappers；
++ node-client-cert-renewal：自动 approve node 后续过期的 client 证书，自动生成的证书 Group 为 system:nodes;
++ node-server-cert-renewal：自动 approve node 后续过期的 server 证书，自动生成的证书 Group 为 system:nodes;
+
+生效配置：
+
+``` bash
+$ kubectl apply -f csr-crb.yaml
+```
+
+## 查看 kublet 的情况
+
+等待一段时间(1-10 分钟)，三个节点的 CSR 都被自动 approved：
+
+``` bash
+$ kubectl get csr
+NAME                                                   AGE       REQUESTOR                 CONDITION
+node-csr--BjlTzxB5Y4op_6wYlDKbbQj1NtX-IOBMLmWhkupEWA   4m        system:bootstrap:8galm1   Approved,Issued
+node-csr-a68FhmUgprTJkaLwnJOLQLOkDQuAviDdBy91ByVtWt0   4m        system:bootstrap:4ef7hj   Approved,Issued
+node-csr-a7DI6d0QjBiPh58IBGYFPUKAZvKs6sfbqlnoc22erRs   4m        system:bootstrap:ai162m   Approved,Issued
+```
+
+所有节点均 ready：
+
+``` bash
+$ kubectl get nodes
+NAME              STATUS   ROLES    AGE     VERSION
+m7-autocv-gpu03   Ready    <none>   4m12s   v1.12.3
+m7-autocv-gpu02   Ready    <none>   4m13s   v1.12.3
+m7-autocv-gpu01     Ready    <none>   12s     v1.12.3
+```
+## kube-controller-manager 为各 node 自动生成了 kubeconfig 文件和公私钥
+
+``` bash
+$ ls -l /k8s/kubernetes/ssl
+-rw------- 1 root root 2306 11月 28 17:20 /k8s/kubernetes/ssl/kubelet.kubeconfig
+
+$ ls -l /k8s/kubernetes/cert/|grep kubelet
+-rw------- 1 root root 1277 11月 28 17:20 kubelet-client-2018-11-28-17-20-06.pem
+lrwxrwxrwx 1 root root   59 11月 28 17:20 kubelet-client-current.pem -> /etc/kubernetes/cert/kubelet-client-2018-11-28-17-20-06.pem
+```
++ 没有自动生成 kubelet server 证书；
+
+## 手动 approve server cert csr
+
+基于[安全性考虑](https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet-tls-bootstrapping/#kubelet-configuration)，CSR approving controllers 默认不会自动 approve kubelet server 证书签名请求，需要手动 approve。
+
+
+``` bash
+$ kubectl get csr
+NAME                                                   AGE     REQUESTOR                     CONDITION
+csr-lrhk2                                              9m25s   system:node:m7-autocv-gpu03   Pending
+csr-pkglb                                              5m24s   system:node:m7-autocv-gpu01   Pending
+csr-xdgcl                                              9m25s   system:node:m7-autocv-gpu02   Pending
+node-csr-BiCW4F3aeIQ-lQRDIRtxrK0SE967asfomI9iXKw7xFw   12m     system:bootstrap:c77gx4       Approved,Issued
+node-csr-KBdQuwtHW6CgTAxtQ1PR5L0-2pL4lhH6D8z0ySeWOdg   10m     system:bootstrap:mnpn4i       Approved,Issued
+node-csr-dZh_5jzWiaXVHtOd6du4aiELSDbUNQ-sDvEnSNfZtYQ   10m     system:bootstrap:em63m9       Approved,Issued
+
+$ kubectl certificate approve csr-lrhk2
+certificatesigningrequest.certificates.k8s.io/csr-lrhk2 approved
+
+$ kubectl certificate approve csr-pkglb
+certificatesigningrequest.certificates.k8s.io/csr-pkglb approved
+
+$ kubectl certificate approve csr-xdgcl
+certificatesigningrequest.certificates.k8s.io/csr-xdgcl approved
+
+$ ls -l /etc/kubernetes/cert/kubelet-*
+-rw------- 1 root root 1277 11月 28 17:20 /etc/kubernetes/cert/kubelet-client-2018-11-28-17-20-06.pem
+lrwxrwxrwx 1 root root   59 11月 28 17:20 /etc/kubernetes/cert/kubelet-client-current.pem -> /etc/kubernetes/cert/kubelet-client-2018-11-28-17-20-06.pem
+-rw------- 1 root root 1326 11月 28 17:25 /etc/kubernetes/cert/kubelet-server-2018-11-28-17-25-44.pem
+lrwxrwxrwx 1 root root   59 11月 28 17:25 /etc/kubernetes/cert/kubelet-server-current.pem -> /etc/kubernetes/cert/kubelet-server-2018-11-28-17-25-44.pem
+```
+## kubelet 提供的 API 接口
+
+kublet 启动后监听多个端口，用于接收 kube-apiserver 或其它组件发送的请求：
+
+``` bash
+$ sudo netstat -lnpt|grep kubelet
+tcp        0      0 127.0.0.1:10248         0.0.0.0:*               LISTEN      73487/kubelet
+tcp        0      0 172.27.128.150:10250    0.0.0.0:*               LISTEN      73487/kubelet
+```
++ 10248: healthz http 服务；
++ 10250: https API 服务；注意：未开启只读端口 10255；
+
+例如执行 `kubectl exec -it nginx-ds-5rmws -- sh` 命令时，kube-apiserver 会向 kubelet 发送如下请求：
+
+    POST /exec/default/nginx-ds-5rmws/my-nginx?command=sh&input=1&output=1&tty=1
+
+kubelet 接收 10250 端口的 https 请求：
+
++ /pods、/runningpods
++ /metrics、/metrics/cadvisor、/metrics/probes
++ /spec
++ /stats、/stats/container
++ /logs
++ /run/、"/exec/", "/attach/", "/portForward/", "/containerLogs/" 等管理；
+
+详情参考：https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/server/server.go#L434:3
+
+-----
+由于关闭了匿名认证，同时开启了 webhook 授权，所有访问 10250 端口 https API 的请求都需要被认证和授权。
+
+预定义的 ClusterRole system:kubelet-api-admin 授予访问 kubelet 所有 API 的权限(kube-apiserver 使用的 kubernetes 证书 User 授予了该权限)：
+
+``` bash
+$ kubectl describe clusterrole system:kubelet-api-admin
+Name:         system:kubelet-api-admin
+Labels:       kubernetes.io/bootstrapping=rbac-defaults
+Annotations:  rbac.authorization.kubernetes.io/autoupdate=true
+PolicyRule:
+  Resources      Non-Resource URLs  Resource Names  Verbs
+  ---------      -----------------  --------------  -----
+  nodes          []                 []              [get list watch proxy]
+  nodes/log      []                 []              [*]
+  nodes/metrics  []                 []              [*]
+  nodes/proxy    []                 []              [*]
+  nodes/spec     []                 []              [*]
+  nodes/stats    []                 []              [*]
+```
+
+## kublet api 认证和授权
+
+kublet 配置了如下认证参数：
+
++ authentication.anonymous.enabled：设置为 false，不允许匿名访问 10250 端口；
++ authentication.x509.clientCAFile：指定签名客户端证书的 CA 证书，开启 HTTPs 证书认证；
++ authentication.webhook.enabled=true：开启 HTTPs bearer token 认证；
+
+同时配置了如下授权参数：
+
++ authroization.mode=Webhook：开启 RBAC 授权；
+
+kubelet 收到请求后，使用 clientCAFile 对证书签名进行认证，或者查询 bearer token 是否有效。如果两者都没通过，则拒绝请求，提示 Unauthorized：
+
+``` bash
+cd /jrtz/k8s/ssl
+$ curl -s --cacert ./ca.pem https://192.168.10.121:10250/metrics
+Unauthorized
+
+$ curl -s --cacert ./ca.pem -H "Authorization: Bearer 123456" https://192.168.10.121:10250/metrics
+Unauthorized
+```
+
+通过认证后，kubelet 使用 `SubjectAccessReview API` 向 kube-apiserver 发送请求，查询证书或 token 对应的 user、group 是否有操作资源的权限(RBAC)；
+
+### 证书认证和授权
+
+``` bash
+# 权限不足的证书；
+cd /jrtz/k8s/ssl
+$ sudo curl -s --cacert ./ca.pem --cert ./kube-controller-manager.pem --key ./kube-controller-manager-key.pem https://192.168.10.121:10250/metrics
+--------------------------------------------------------
+Forbidden (user=system:kube-controller-manager, verb=get, resource=nodes, subresource=metrics)
+
+# 使用部署 kubectl 命令行工具时创建的、具有最高权限的 admin 证书；
+$ sudo curl -s --cacert ./ca.pem --cert ./admin.pem --key ./admin-key.pem https://192.168.10.121:10250/metrics|head
+-----------------------------------------------------------
+# HELP apiserver_client_certificate_expiration_seconds Distribution of the remaining lifetime on the certificate used to authenticate a request.
+# TYPE apiserver_client_certificate_expiration_seconds histogram
+apiserver_client_certificate_expiration_seconds_bucket{le="0"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="21600"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="43200"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="86400"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="172800"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="345600"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="604800"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="2.592e+06"} 0
+```
++ `--cacert`、`--cert`、`--key` 的参数值必须是文件路径，如上面的 `./admin.pem` **不能省略** `./`，否则返回 `401 Unauthorized`；
+
+### bear token 认证和授权
+
+创建一个 ServiceAccount，将它和 ClusterRole `system:kubelet-api-admin` 绑定，从而具有调用 kubelet API 的权限：
+
+``` bash
+$ cd /jrtz/k8s/ssl
+$ kubectl create sa kubelet-api-test
+$ kubectl create clusterrolebinding kubelet-api-test --clusterrole=system:kubelet-api-admin --serviceaccount=default:kubelet-api-test
+$ SECRET=$(kubectl get secrets | grep kubelet-api-test | awk '{print $1}')
+$ TOKEN=$(kubectl describe secret ${SECRET} | grep -E '^token' | awk '{print $2}')
+$ echo ${TOKEN}
+$
+$ curl -s --cacert ./ca.pem -H "Authorization: Bearer ${TOKEN}" https://192.168.10.121:10250/metrics|head
+----------------------------------------------------------------------
+# HELP apiserver_client_certificate_expiration_seconds Distribution of the remaining lifetime on the certificate used to authenticate a request.
+# TYPE apiserver_client_certificate_expiration_seconds histogram
+apiserver_client_certificate_expiration_seconds_bucket{le="0"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="21600"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="43200"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="86400"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="172800"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="345600"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="604800"} 0
+apiserver_client_certificate_expiration_seconds_bucket{le="2.592e+06"} 0
+```
+
+### cadvisor 和 metrics
+
+cadvisor 统计所在节点各容器的资源(CPU、内存、磁盘、网卡)使用情况，分别在自己的 http web 页面(4194 端口)和 10250 以 promehteus metrics 的形式输出。
+
+浏览器访问 https://192.168.10.121:10250/metrics 和 https://192.168.10.121:10250/metrics/cadvisor 分别返回 kublet 和 cadvisor 的 metrics。**注意公司48网段端口禁用**
+
+![cadvisor-metrics](images/cadvisor-metrics.png)
+
+注意：
+
++ kublet.config.json 设置 authentication.anonymous.enabled 为 false，不允许匿名证书访问 10250 的 https 服务；
+
++ 参考[A.浏览器访问kube-apiserver安全端口.md](A.浏览器访问kube-apiserver安全端口.md)，创建和导入相关证书，然后访问上面的 10250 端口；
+
+## 浏览器访问kube-apiserver安全端口
+
+#### 注意：公司48网段端口禁用
+
+以下命令win系统不成功，
+
+```bash
+openssl pkcs12 -export -out admin.pfx -inkey ./admin-key.pem -in ./admin.pem -certfile ./ca.pem
+```
+
+- [ ] 使用以下命令，也不成功
+
+```bash
+openssl x509 -outform der -in ./ca.pem -out ./ca.crt
+openssl x509 -outform der -in ./ca-key.pem -out ./ca-key.crt
+openssl pkcs12 -in ./admin.pfx -nocerts -nodes -out ./admin.key
+```
+## 获取 kublet 的配置
+
+从 kube-apiserver 获取各 node 的配置：
+
+``` bash
+$ # 使用部署 kubectl 命令行工具时创建的、具有最高权限的 admin 证书；
+$ export KUBE_APISERVER="https://127.0.0.1:8443"
+$ sudo curl -sSL --cacert ./ca.pem --cert ./admin.pem --key ./admin-key.pem ${KUBE_APISERVER}/api/v1/nodes/192.168.10.110/proxy/configz | jq \
+  '.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"'
+{
+  "syncFrequency": "1m0s",
+  "fileCheckFrequency": "20s",
+  "httpCheckFrequency": "20s",
+  "address": "172.27.128.150",
+  "port": 10250,
+  "rotateCertificates": true,
+  "serverTLSBootstrap": true,
+  "authentication": {
+    "x509": {
+      "clientCAFile": "/etc/kubernetes/cert/ca.pem"
+    },
+    "webhook": {
+      "enabled": true,
+      "cacheTTL": "2m0s"
+    },
+    "anonymous": {
+      "enabled": false
+    }
+  },
+  "authorization": {
+    "mode": "Webhook",
+    "webhook": {
+      "cacheAuthorizedTTL": "5m0s",
+      "cacheUnauthorizedTTL": "30s"
+    }
+  },
+  "registryPullQPS": 5,
+  "registryBurst": 10,
+  "eventRecordQPS": 5,
+  "eventBurst": 10,
+  "enableDebuggingHandlers": true,
+  "healthzPort": 10248,
+  "healthzBindAddress": "127.0.0.1",
+  "oomScoreAdj": -999,
+  "clusterDomain": "cluster.local",
+  "clusterDNS": [
+    "10.254.0.2"
+  ],
+  "streamingConnectionIdleTimeout": "4h0m0s",
+  "nodeStatusUpdateFrequency": "10s",
+  "imageMinimumGCAge": "2m0s",
+  "imageGCHighThresholdPercent": 85,
+  "imageGCLowThresholdPercent": 80,
+  "volumeStatsAggPeriod": "1m0s",
+  "cgroupsPerQOS": true,
+  "cgroupDriver": "cgroupfs",
+  "cpuManagerPolicy": "none",
+  "cpuManagerReconcilePeriod": "10s",
+  "runtimeRequestTimeout": "2m0s",
+  "hairpinMode": "promiscuous-bridge",
+  "maxPods": 2000,
+  "podPidsLimit": -1,
+  "resolvConf": "/etc/resolv.conf",
+  "cpuCFSQuota": true,
+  "maxOpenFiles": 1000000,
+  "contentType": "application/vnd.kubernetes.protobuf",
+  "kubeAPIQPS": 5,
+  "kubeAPIBurst": 10,
+  "serializeImagePulls": false,
+  "evictionHard": {
+    "imagefs.available": "15%",
+    "memory.available": "100Mi",
+    "nodefs.available": "10%",
+    "nodefs.inodesFree": "5%"
+  },
+  "evictionPressureTransitionPeriod": "5m0s",
+  "enableControllerAttachDetach": true,
+  "makeIPTablesUtilChains": true,
+  "iptablesMasqueradeBit": 14,
+  "iptablesDropBit": 15,
+  "featureGates": {
+    "RotateKubeletClientCertificate": true,
+    "RotateKubeletServerCertificate": true
+  },
+  "failSwapOn": true,
+  "containerLogMaxSize": "10Mi",
+  "containerLogMaxFiles": 5,
+  "enforceNodeAllocatable": [
+    "pods"
+  ],
+  "kind": "KubeletConfiguration",
+  "apiVersion": "kubelet.config.k8s.io/v1beta1"
+}
+```
+
+或者参考代码中的注释：https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/apis/kubeletconfig/v1beta1/types.go
+
+## 设定`master`节点加上污点Taint不让(没有声明容忍该污点的)pod跑在master节点上：
+
+```bash
+kubectl taint nodes 192.168.10.120 node-role.kubernetes.io/master="":NoSchedule
+```
+
+## node打标签声明Role
+
+``` bash
+kubectl label node ${MasterArray[@]} node-role.kubernetes.io/master=""
+kubectl label node ${NodeArray[@]} node-role.kubernetes.io/worker=worker
+kubectl get node -a --show-labels=true
+```
+
+
+
+## 参考
+1. kubelet 认证和授权：https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet-authentication-authorization/
