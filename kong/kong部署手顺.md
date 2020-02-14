@@ -1,3 +1,11 @@
+## 创建namespace
+
+执行namespace.yaml
+
+## 创建Secret
+
+执行drone.yml
+
 ## 安装PG数据库
 
 - 创建PVC 
@@ -12,8 +20,9 @@
 
 set -eufo pipefail
 
-mkdir tmp-qweiur3412
-cd tmp-qweiur3412
+tmpcert="tmpcert"
+mkdir $tmpcert
+cd $tmpcert
 
 ### Create a key+certificate for the control plane
 cat <<EOF | kubectl create -f -
@@ -28,17 +37,18 @@ spec:
   - key encipherment
   - server auth
 EOF
+
 kubectl certificate approve kong-control-plane.kong.svc
-kubectl -n kong create secret tls kong-control-plane.kong.svc --key=privkey.pem --cert=<(kubectl get csr kong-control-plane.kong.svc -o jsonpath='{.status.certificate}' | base64 --decode)
+kubectl -n kongdev create secret tls kong-control-plane.kong.svc --key=privkey.pem --cert=<(kubectl get csr kong-control-plane.kong.svc -o jsonpath='{.status.certificate}' | base64 --decode)
 kubectl delete csr kong-control-plane.kong.svc
 rm privkey.pem
 cd ..
-rm -rf tmp-qweiur3412
+rm -rf $tmpcert
 ```
 
 ## 创建用户角色权限
 
-执行 kong-sa-role.yaml
+执行 sa-role.yaml
 ```yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -87,15 +97,18 @@ subjects:
 
 ## 创建数据平面
 
+- kubectl create cm prometheus-cm --from-file=prometheus-server.conf -n xxx
 - 执行 data-plane-deploy.yaml
 - 执行 data-plane-service.yaml
 
 ## 创建Konga控制台
 
-- konga-ui.yml 修改环境变量 NODE_ENV=production，如果想开发环境则值为development
+- **如果IDC有一套kona，多个环境就可以共用一套环境**
+- konga-ui.yml 中的NODE_ENV先为development，这样才能创建对应的数据库
+- 如果是生产环境，等前一步完成后，修改环境变量 NODE_ENV=production，
 - 执行 konga-ui.yml
 - 内网访问或者配置ingress访问
-- 密码采用的是 java 的 BCryptPasswordEncoder加密器
+- tip: 密码采用的是 java 的 BCryptPasswordEncoder加密器
 
 ## 创建service,route,consumer并绑定hmac
 ## 用户绑定服务

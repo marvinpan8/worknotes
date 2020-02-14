@@ -26,7 +26,7 @@ Kong侦听四个端口的请求，默认情况是：
 
 #### Http-Log
 
-http-log是我比较推荐的，它的原理是设置一个log-server地址，然后Kong会把日志通过post请求发送到设置的log-server，然后通过log-server把日志给沉淀下来，相比之前两种插件，这一种只要启一个log-server就好了，出于性能考虑，我用Rust实现了一个 [log-server](<https://github.com/Makcy/log-server>)，有兴趣可以参考看一下。
+http-log是我比较推荐的，它的原理是设置一个log-server地址，然后Kong会把日志通过post请求发送到设置的log-server，然后通过log-server把日志给沉淀下来，相比之前两种插件，这一种只要启一个log-server就好了，出于性能考虑，我用Rust实现了一个 [log-server](<https://github.com/marvinpan8/log-server>)，有兴趣可以参考看一下。
 
 #### prometheus可视化
 
@@ -132,6 +132,9 @@ kong.request.get_path_with_query()=/dataapi/consensus/est_bsc?begin_date=2018010
 
 ---
 
+## 注意事项
+
 ### http-log / kafka-log日志的坑
 
 - 必须配置`All consumers`，而不指定 consumer id,才能打印 401，403之类的返回日志。且401没有consumer属性值。
+
