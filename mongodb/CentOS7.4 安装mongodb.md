@@ -76,7 +76,7 @@ $ source /etc/profile
 5、创建数据库目录
 
 ```bash
-$ cd /usr/mongodb
+$ cd /jrtz/mongo/mongodb
 $ touch mongodb.conf
 $ mkdir db
 $ mkdir log
@@ -87,23 +87,25 @@ $ touch mongodb.log
 6、修改mongodb配置文件。
 
 ```bash
-vim /usr/mongodb/mongodb.conf
+vim /jrtz/mongo/mongodb/mongodb.conf
 ```
 
 添加以下内容
 
 ```properties
 port=27017 #端口
-dbpath= /usr/mongodb/db #数据库存文件存放目录
-logpath= /usr/mongodb/log/mongodb.log #日志文件存放路径
+dbpath= /jrtz/mongo/mongodb/db #数据库存文件存放目录
+logpath= /jrtz/mongo/mongodb/log/mongodb.log #日志文件存放路径
 logappend=true #使用追加的方式写日志
 fork=true #以守护进程的方式运行，创建服务器进程
 maxConns=100 #最大同时连接数
-noauth=true #不启用验证
+#noauth=true #不启用验证
 journal=true #每次写入会记录一条操作日志（通过journal可以重新构造出写入的数据）。
 #即使宕机，启动时wiredtiger会先将数据恢复到最近一次的checkpoint点，然后重放后续的journal日志来恢复。
 storageEngine=wiredTiger  #存储引擎有mmapv1、wiretiger、mongorocks
+wiredTigerCacheSizeGB=24 #最大内存大小限制,默认物理内存的1/2
 bind_ip = 0.0.0.0  #这样就可外部访问了，例如从win10中去连虚拟机中的MongoDB
+auth=true #用户认证
 pidfilepath=/jrtz/mongo/mongodb/mongod.pid
 ```
 
@@ -252,8 +254,8 @@ image.png
 
 ```properties
 port=27017 #端口
-dbpath= /usr/mongodb/db #数据库存文件存放目录
-logpath= /usr/mongodb/log/mongodb.log #日志文件存放路径
+dbpath= /jrtz/mongo/mongodb/db #数据库存文件存放目录
+logpath= /jrtz/mongo/mongodb/log/mongodb.log #日志文件存放路径
 logappend=true #使用追加的方式写日志
 fork=true #以守护进程的方式运行，创建服务器进程
 maxConns=100 #最大同时连接数
@@ -286,9 +288,10 @@ image.png
 插曲：在添加用户名之前应该先执行./mongo命令先打开mongodb数据库
  来自网友@OldX_cea8
 
-4、依次执行下列命令 添加用户名
+## 4、创建数据库和用户名
 
 ```bash
+$ mongo
 #使用admin数据库
 use admin
 #给admin数据库添加管理员用户名和密码，用户名和密码请自行设置
@@ -305,6 +308,13 @@ db.changeUserPassword('quotation','quotationinvest0755');
 db.dropUser(“XXXX”)
 #删除当前库的所有用户
 db.dropAllUser()
+# 查询所有库
+show dbs
+# 删除当前库
+use test
+db.dropDatabase()
+# 查询所有集合
+show collections
 ```
 
 执行完后，ctrl + c结束shell，并通过关闭，打开进行重启数据库。

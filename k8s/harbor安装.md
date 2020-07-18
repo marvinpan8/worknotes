@@ -4,8 +4,6 @@
 ```bash
 # 测试环境
 kubectl apply -f pvc-harbor-sit.yaml
-# 生产环境
-kubectl apply -f pvc-harbor-prod.yaml
 # 查看卷
 kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
 ```
@@ -13,18 +11,16 @@ kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
 ## 安装harbor
 ```bash
 # SIT环境
+# 配置 secret
 cd /jrtz/harbor/harbor-sit/ssl
-kubectl apply -f tls-secret.yaml
-# 修改values.yaml中的 secretName值为 harbor-sit-ingress
-helm install --namespace harbor-sit --name harbor-sit  .
+kubectl apply -f secret-ing-tls.yaml
+# 修改values.yaml中的 secretName，notarySecretName值为 harbor-sit-ingress-tls
+vim /jrtz/harbor/harbor-sit/values.yaml
 ------------------------------------------------------
 # 测试环境
 cd /jrtz/harbor/harbor-sit
 helm install --namespace harbor-sit --name harbor-sit .
 ------------------------------------------------------
-# 生产环境
-cd /jrtz/harbor/harbor-prod
-helm install --namespace harbor-prod --name harbor-prod .
 ```
 ### 下载登录证书,  存储为ca.crt
 
@@ -43,7 +39,7 @@ for n in `seq -w 01 06`;do scp ca.crt node-$n:/etc/docker/certs.d/harbor-sit.jrt
 
 ```bash
 # 进入 harbor-registry容器中
-$ kubectl exec -it harbor-sit-harbor-registry-77b4cd4995-gqt89 bash
+$ kubectl exec -it harbor-sit-harbor-registry-8f76d56fb-z2wrm bash
 root [ / ]# df -h
 192.168.10.113:vol_fc798971b1e11fff8206961fcc79cd63 500G  5.1G  495G   2% /storage
 # 进入 glusterfs 容器中

@@ -5,10 +5,14 @@
 ### 重要属性-marvinpan
 
 ```properties
-#决定了Kong集群节点在性能和一致性间的平衡
-db_update_frequency = 5
 #该节点数据存储实体缓存的生存时间(秒)
 db_cache_ttl = 600 
+#节点间更新数据库的时间，决定了Kong集群节点在性能和一致性间的平衡（秒）
+db_update_frequency = 60
+# PostgreSQL或者单数据库，这个值可以被设置为0
+db_update_propagation = 0
+# 缓存刷新时间，单位秒
+db_resurrect_ttl = 60
 anonymous_reports = off 
 headers = off
 dns_resolver=

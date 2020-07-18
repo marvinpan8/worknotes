@@ -108,9 +108,9 @@ centos-release-gluster39.noarch : Gluster 3.9 (Short Term Stable) packages from 
 
 ```bash
 # 暂时不用这句
-[root@node01 ~]# yum -y --enablerepo=centos-gluster*-test install glusterfs-server glusterfs-cli glusterfs-geo-replication
+$ yum -y --enablerepo=centos-gluster*-test install glusterfs-server glusterfs-cli glusterfs-geo-replication
 ----------------------------------------------
-yum -y --enablerepo=centos-gluster*-test install glusterfs glusterfs-server glusterfs-fuse glusterfs-rdma glusterfs-geo-replication glusterfs-devel
+$ yum -y --enablerepo=centos-gluster*-test install glusterfs glusterfs-server glusterfs-fuse glusterfs-rdma glusterfs-geo-replication glusterfs-devel
 ```
 
 　　**1.5、查看glusterfs版本并启动glusterfs服务**(全部glusterfs主机)
@@ -147,7 +147,8 @@ udp6       0      0 ::1:323                 :::*                                
 　如果是centos6默认是不支持xfs的文件格式，要先安装xfs支持包
 
 ```bash
-yum install xfsprogs -y
+# centos6专用
+$ yum install xfsprogs -y
 ```
 
 　　用`fdisk -l` 查看磁盘设备，例如查看data-1-1的磁盘设备，这里的sdc、sdd、sde是新加的硬盘

@@ -202,13 +202,14 @@ deployment.extensions/heketi created
 
 ```bash
 # 以113容器为例
-$ kubectl exec -it glusterfs-svpc7 bash
-[root@vmsrv-010-113 /]$  lsblk
-[root@vmsrv-010-113 /]$  df -Th
+$ kubectl exec -it glusterfs-t9t4z bash
+[root@vmsrv-010-113 /]$ lsblk
+[root@vmsrv-010-113 /]$ df -Th
 /dev/mapper/vg_3c161e1df90858773210ee093d7c2a18-brick_06528adcac48fcbf389a160fe7fd862e  2.0G   33M  2.0G   2% /var/lib/heketi/mounts/vg_3c161e1df90858773210ee093d7c2a18/brick_06528adcac48fcbf389a160fe7fd862e
 ---------------------------------------------------------------------
 # 进入容器目录查看文件
-[root@vmsrv-010-113 /]$ ls -l  /var/lib/heketi/mounts/vg_3c161e1df90858773210ee093d7c2a18/brick_06528adcac48fcbf389a160fe7fd862e/brick
+[root@vmsrv-010-113 /]$ ls -l /var/lib/heketi/mounts/vg_3c161e1df90858773210ee093d7c2a18
+/brick_06528adcac48fcbf389a160fe7fd862e/brick
 ----------------------
 -rw-r--r-- 2 root root   371 Jul 19 11:52 container.log
 -rw-r--r-- 2 root root 49152 Jul 19 11:52 heketi.db
@@ -217,7 +218,7 @@ $ kubectl exec -it glusterfs-svpc7 bash
 [root@vmsrv-010-113 /]$ gluster peer status
 # 查看volume的具体信息：2副本的replicate卷；
 # 另有 vgscan， vgdisplay 也可查看逻辑卷组信息等
-[root@vmsrv-010-113 /]$  gluster volume list
+[root@vmsrv-010-113 /]$ gluster volume list
 Number of Peers: 2
 Hostname: vmsrv-010-113
 Uuid: 284c0207-a3c4-4891-8daf-5a1718ee3b60
@@ -225,7 +226,7 @@ State: Peer in Cluster (Connected)
 Hostname: 192.168.10.143
 Uuid: 25b6ed92-6355-425a-adc9-25202419bf9a
 State: Peer in Cluster (Connected)
-[root@vmsrv-010-113 /]$  gluster volume info vol_98f6395a2fb7c34a252666a3b0613835
+[root@vmsrv-010-113 /]$ gluster volume info vol_98f6395a2fb7c34a252666a3b0613835
 Volume Name: vol_98f6395a2fb7c34a252666a3b0613835
 Type: Replicate   # 可以看到 Type: Replicate复制卷
 Volume ID: 684dff05-7792-4d71-8a97-3261c288a12e

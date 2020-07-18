@@ -117,10 +117,14 @@ servicemonitors.monitoring.coreos.com   2019-03-18T05:34:40Z
 
 - `8588`-*Kubernetes Deployment Statefulset Daemonset metrics*
 - `8919`-*Node Exporter 0.16 0.17 for Prometheus 监控展示看板*
-- `5851`  `4475`-traefik
-- `3070`-ETCD
+- `11559`- Node Dashboard for Prometheus 中文版
+- `10551`-NameSpace Based on Memory
+- `6879`-Analysis by Pod
+- `5851`  `4475`---traefik，5851优化后参考110-k8s文件夹
+- `3070`-`9733`--`9618`---ETCD
 - `7424`--kong
 - `11049`---Flink
+- `10041`- `8376`---glusterfs。10041优化后参考110机器文档
 
 vim grafana-admin-secret.yml
 

@@ -1,3 +1,18 @@
+# 前言
+- 创建jenkins的执行namspace所有权限
+```bash
+kubectl create rolebinding jenkins-admin-binding --clusterrole=admin --user=jenkins --namespace=XXX
+```
+- 创建通用invest的访问日志权限
+```bash
+kubectl create rolebinding invest-binding --clusterrole=invest --serviceaccount=kube-system:invest --namespace=XXX
+```
+- 创建个人用户的namspace所有权限
+```bash
+kubectl create rolebinding invest-binding --clusterrole=admin --serviceaccount=kube-system:wuzh --namespace=XXX
+```
+
+---
 # 创建用户认证授权的kubeconfig文件
 
 [参考宋净超文章](https://rootsongjc.gitbooks.io/kubernetes-handbook/content/guide/kubectl-user-authentication-authorization.html)
@@ -242,7 +257,7 @@ kubectl apply -f invest-role.yml
 ```bash
 kubectl create sa invest -n kube-system
 ```
-### 绑定命名空间
+### 查看日志绑定命名空间
 
 ```bash
 kubectl create rolebinding invest-binding --clusterrole=invest --serviceaccount=kube-system:invest --namespace=XXX
@@ -266,7 +281,7 @@ echo $DASHBOARD_LOGIN_TOKEN
 ```bash
 kubectl create sa wuzh -n kube-system
 ```
-### 绑定命名空间
+### 个人绑定命名空间
 
 ```bash
 kubectl create rolebinding invest-binding --clusterrole=admin --serviceaccount=kube-system:wuzh --namespace=XXX

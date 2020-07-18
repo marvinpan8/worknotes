@@ -3,10 +3,10 @@
   否则启动 redis 报错
 
 - `vim /sys/kernel/mm/transparent_hugepage/enabled`
-
 - `echo never > /sys/kernel/mm/transparent_hugepage/enabled`
 - `vim /etc/rc.local` 增加上面的执行语句
 - `chmod +x /etc/rc.d/rc.local`
+- `sysctl net.core.somaxconn=1024`
 - `reboot`
 - 重新检查`vim /sys/kernel/mm/transparent_hugepage/enabled`
 
@@ -83,8 +83,14 @@ spec:
         key: node
         operator: Equal
         value: comtest
+      initContainers:
+      - name: init-svc
+        image: busybox
+        command: ['sh', '-c', 'sysctl net.core.somaxconn=1024']
+        securityContext:
+          privileged: true
       containers:
-      - image: harbor-test.szidc-k8s01.investoday.net/base/redis:5.0.4-alpine
+      - image: harbor-sit.jrtzcloud.cn/base/redis:5.0.4-alpine
         name: redis
         args: ["/usr/local/etc/redis/redis.conf"]
         imagePullPolicy: IfNotPresent
