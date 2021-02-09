@@ -18,7 +18,7 @@ metadata:
   namespace: weave
 spec:
   rules:
-  - host: weave.szidc-k8s01.investoday.net
+  - host: weave.jrtzcloud.cn
     http:
       paths:
       - path: /

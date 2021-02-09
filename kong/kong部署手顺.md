@@ -149,7 +149,7 @@ curl http://172.22.254.158:8001/consumer-services -H 'Content-Type: application/
 
   - **此值确定Kong节点轮询数据库以查找无效事件的频率。较低的值意味着轮询作业将更频繁地执行，但是您的Kong节点将跟上您所应用的更改。较高的值将意味着Kong节点运行轮询作业的时间将减少，并将重点放在代理流量上。**
 
-    **注意:意味着对Kong的配置更改在集群中传播的时间最长为db_update_frequency秒。**
+    **注意:  意味着对Kong的配置更改在集群中传播的时间最长为db_update_frequency秒。**
 
   - 用数据存储检查更新实体的频率（以秒为单位）。当节点通过AdminAPI创建、更新或删除实体时，其他节点需要等待下一个轮询（由此值配置）来最终清除旧的缓存实体并开始使用新的实体。Frequency (in seconds) at which to check for updated entities with the datastore. When a node creates, updates, or deletes an entity via the Admin API, other nodes need to wait for the next poll (configured by this value) to eventually purge the old cached entity and start using the new one.
 

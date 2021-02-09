@@ -6,6 +6,7 @@
 
 可以从url param，header，cookie中获取token，并且验证签名有效，如果有效，Kong将把请求代理到上游服务，如果没有找到token或验证失败则丢弃请求。
 
+
 ### 环境准备
 
 - Kong相关环境

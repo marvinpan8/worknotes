@@ -371,12 +371,75 @@ spec:
 
 ```bash
 k apply -f /k8s/prometheus/manifests/alertmanager/alertmanager-secret.yaml 
+k create cm alert-default-tmpl --from-file=default.tmpl
+```
+新增自定义模板
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: Alertmanager
+metadata:
+  labels:
+    alertmanager: main
+  name: main
+  namespace: monitoring
+spec:
+  baseImage: marvinpan/prometheus-alertmanager
+  nodeSelector:
+    beta.kubernetes.io/os: linux
+    node-role.kubernetes.io/monitoring: "monitoring"
+  tolerations:
+    - key: "node-role.kubernetes.io/monitoring"
+      operator: "Equal"
+      value: "monitoring"
+      effect: "NoSchedule"
+  replicas: 3
+  securityContext:
+    fsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: alertmanager-main
+  version: v0.16.0
+  # 新增自定义报警模板
+  configMaps: 
+    - alert-default-tmpl
 ```
 
 - 删除alertmanager-main-0 ，1，2的pod，自动重启。
 ```bash
 k delete po alertmanager-main-X
 ```
+
+- 校验config,  进入alertmanager-main-X容器，执行检查
+
+```bash
+/bin/amtool check-config /etc/alertmanager/config/alertmanager.yaml 
+-------------------------
+Checking 'alertmanager.yaml'  SUCCESS
+Found:
+ - global config
+ - route
+ - 0 inhibit rules
+ - 5 receivers
+ - 0 templates
+```
+
+### 总结更新模板脚本
+
+110机器
+
+```bash
+cd /k8s/prometheus/manifests/alertmanager
+git pull
+k delete cm alert-default-tmpl -n monitoring
+k create cm alert-default-tmpl --from-file=default.tmpl -n monitoring
+k delete po alertmanager-main-0 -n monitoring
+k delete po alertmanager-main-1 -n monitoring
+k delete po alertmanager-main-2 -n monitoring
+k get po -n monitoring|grep alert 
+sleep 6
+k logs -f alertmanager-main-0 -c alertmanager
+```
+
 
 
 ## Q1：prometheus报警CPUThrottlingHigh

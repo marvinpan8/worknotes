@@ -22,9 +22,38 @@ databases 256
 # 先创建文件夹 mkdir data
 dir ./data/
 requirepass zaq1xsw2
-# 最大内存物理内存/4，本例：16G=17179869184 byte
-maxmemory 17179869184
+# 最大内存物理内存的3/4，本例：16G=17179869184 byte(B) * 3/4 = 12884901888
+maxmemory 12884901888
 #内存策略，不驱逐
 maxmemory-policy noeviction
 ```
 
+### 慢日志查询
+
+```bash
+slowlog get 100
+# 长度
+SLOWLOG LEN
+# 清空
+SLOWLOG RESET
+```
+### 开机自启动
+
+vim /etc/systemd/system/redis.service 
+
+```toml
+[Unit]
+Description=redis
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/redis6379.pid
+ExecStart=/jrtz/redis-6.0.4/src/redis-server /jrtz/redis-6.0.4/redis.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+```

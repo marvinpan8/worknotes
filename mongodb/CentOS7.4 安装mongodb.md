@@ -98,7 +98,7 @@ dbpath= /jrtz/mongo/mongodb/db #数据库存文件存放目录
 logpath= /jrtz/mongo/mongodb/log/mongodb.log #日志文件存放路径
 logappend=true #使用追加的方式写日志
 fork=true #以守护进程的方式运行，创建服务器进程
-maxConns=100 #最大同时连接数
+maxConns=2048 #最大同时连接数
 #noauth=true #不启用验证
 journal=true #每次写入会记录一条操作日志（通过journal可以重新构造出写入的数据）。
 #即使宕机，启动时wiredtiger会先将数据恢复到最近一次的checkpoint点，然后重放后续的journal日志来恢复。
@@ -258,7 +258,7 @@ dbpath= /jrtz/mongo/mongodb/db #数据库存文件存放目录
 logpath= /jrtz/mongo/mongodb/log/mongodb.log #日志文件存放路径
 logappend=true #使用追加的方式写日志
 fork=true #以守护进程的方式运行，创建服务器进程
-maxConns=100 #最大同时连接数
+maxConns=2048 #最大同时连接数
 #noauth = true #不启用验证
 journal=true #每次写入会记录一条操作日志（通过journal可以重新构造出写入的数据）。
 #即使宕机，启动时wiredtiger会先将数据恢复到最近一次的checkpoint点，然后重放后续的journal日志来恢复。
@@ -300,8 +300,15 @@ db.createUser({user:"admin",pwd:"zaq1xsw2",roles:["root"]})
 db.auth("admin", "zaq1xsw2")
 #切换到要设置的数据库,以test为例,此命令也可以创建
 use test
-#为test创建用户,用户名和密码请自行设置。
-db.createUser({user: "test", pwd: "zaq1xsw2", roles: [{ role: "dbOwner", db: "test" }]})
+#为test创建用户,用户名和密码请自行设置。角色选择read 或readWrite
+db.createUser({user: "quotes_stock", pwd: "quotes_stockinvest2020", roles: [
+    { role: "readWrite", db: "quotes_stock" }]})
+# 创建多个DB的只读权限
+db.createUser({user: "quotes_viewer", pwd: "quotes_viewerinvest2020", roles: [
+    { role: "read", db: "quotes_stock" },
+    { role: "read", db: "quotes_index" },
+    { role: "read", db: "quotes_info" }
+    ]})
 #更改密码
 db.changeUserPassword('quotation','quotationinvest0755'); 
 #删除当前库的一个用户

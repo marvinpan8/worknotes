@@ -207,6 +207,18 @@ $ su postgres   #切换到psql用户下
 $ psql -d wangye -U postgres -f system_calls.sql   # sql 文件在当前路径下
 ```
 
+### 创建用户并授权
+
+```bash
+create user gitea superuser password 'gitea';
+# 授权数据库
+GRANT ALL PRIVILEGES ON DATABASE gitea TO gitea;
+# 授权表，需在数据库中执行：\c gitea
+GRANT ALL PRIVILEGES ON all tables in schema public TO gitea;
+```
+
+
+
 ### 删除数据库
 
 ```bash

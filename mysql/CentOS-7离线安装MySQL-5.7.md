@@ -32,10 +32,8 @@
    ```bash
    # 添加mysql用户组
    groupadd mysql
-   
    # 添加mysql用户
    useradd -g mysql mysql -d /home/mysql
-   
    # 修改mysql用户的登陆密码
    passwd mysql
    ```
@@ -43,23 +41,22 @@
 2. 创建临时目录、数据目录和日志目录
 
    ```bash
-   /home/mysql/3306/data
-   /home/mysql/3306/log
-   /home/mysql/3306/tmp
+   mkdir -p /home/mysql/3306/data
+   mkdir -p /home/mysql/3306/log
+   mkdir -p /home/mysql/3306/tmp
+   chown -R mysql:mysql 3306
    ```
 
-3. 将下载的 `mysql-5.7.21-linux-glibc2.12-x86_64.tar` 安装包上传至服务器 `/usr/local`目录下；
+3. 将下载的 `mysql-5.7.21-linux-glibc2.12-x86_64.tar` **安装包上传至服务器 `/usr/local`目录下**；
 
    ```bash
+   cd /usr/local
    # 解压缩
    tar -xvf mysql-5.7.21-linux-glibc2.12-x86_64.tar
-   
    # 会得到一个mysql-5.7.21-linux-glibc2.12-x86_64.tar.gz文件，再解压缩
    tar -zxvf mysql-5.7.21-linux-glibc2.12-x86_64.tar.gz
-   
    # 建立软链接，便于以后版本升级
    ln -s mysql-5.7.21-linux-glibc2.12-x86_64 mysql
-   
    # 修改mysql文件夹下所有文件的用户和用户组
    chown -R mysql:mysql mysql/
    ```
@@ -67,11 +64,9 @@
 4. 创建配置文件
 
    ```bash
-   # 创建配置文件
-   cd /etc
-   
-   # 在my.cnf文件中添加对应的配置项，文章末尾会提供一个默认的my.cnf配置
-   vi my.cnf
+   # 创建配置文件,在my.cnf文件中添加对应的配置项，
+   # 文章末尾会提供一个默认的my.cnf配置
+   vi /etc/my.cnf
    ```
 
 5. 安装数据库
@@ -83,23 +78,25 @@
 
    > 这里最好指定启动mysql的用户名，否则就会在启动MySQL时出现权限不足的问题
 
-   安装完成后，在my.cnf中配置的datadir目录下生成一个error.log文件，里面记录了**root用户的随机密码**。
+   安装完成后，在my.cnf中配置的 /home/mysql/3306/log 目录下生成一个error.log文件，里面记录了**root用户的随机密码**。比如下面的 XXXXXXX
+
+   ```
+   2020-11-01T08:57:13.261711Z 1 [Note] A temporary password is generated for root@localhost: XXXXXXX
+   ```
+
+   
 
 6. 设置开机自启动服务
 
    ```bash
    # 复制启动脚本到资源目录
    cp ./support-files/mysql.server /etc/rc.d/init.d/mysqld
-   
    # 增加mysqld服务控制脚本执行权限
    chmod +x /etc/rc.d/init.d/mysqld
-   
    # 将mysqld服务加入到系统服务
    chkconfig --add mysqld
-   
    # 检查mysqld服务是否已经生效
    chkconfig --list mysqld
-   
    # 切换至mysql用户，启动mysql
    service mysqld start
    ```
@@ -111,10 +108,8 @@
    ```bash
    # 切换至mysql用户
    su - mysql
-   
    # 修改配置文件，增加export PATH=$PATH:/usr/local/mysql/bin
    vi .bash_profile
-   
    # 立即生效
    source .bash_profile
    ```
@@ -124,9 +119,8 @@
    ```bash
    # 登陆mysql
    mysql -uroot -p
-   
    # 修改root用户密码
-   set password for root@localhost=password("123456");
+   set password for root@localhost=password("invest0755");
    ```
 
 # 总结
@@ -135,7 +129,7 @@
 
 # 附录
 
-下述的my.cnf配置仅供参考，如果你有更好的建议，请告诉我。
+下述的 /etc/my.cnf 配置仅供参考，如果你有更好的建议，请告诉我。
 
 ```properties
 [client]                                        # 客户端设置，即客户端默认的连接参数
@@ -201,6 +195,52 @@ innodb_read_io_threads = 4
 innodb_lock_wait_timeout = 120                  # InnoDB事务在被回滚之前可以等待一个锁定的超时秒数。InnoDB在它自己的锁定表中自动检测事务死锁并且回滚事务。InnoDB用LOCK TABLES语句注意到锁定设置。默认值是50秒
 innodb_log_file_size = 32M                      # 此参数确定数据日志文件的大小，更大的设置可以提高性能，但也会增加恢复故障数据库所需的时间
 ```
+
+### 性能测试（仅测试，不推荐常用）
+
+```properties
+sync_binlog = 0 #表示binlog不实时刷盘，由操作系统控制什么时候刷新缓存持久化
+innodb_flush_log_at_trx_commit = 0  #表示不是每一个事务提交时写一次redo
+innodb_buffer_pool_size = 内存的70%   #调大缓冲池
+```
+
+### 基本命令
+
+查看配置变量
+
+```bash
+show global variables;
+show variables like 'innodb_buffer_pool_size%'; 
+
+```
+
+创建用户, 可以使用通配符%
+
+```bash
+CREATE USER 'username'@'192.168.1%' IDENTIFIED BY 'password';
+# 查看
+SELECT host, user FROM user;
+# 修改用户host
+UPDATE user SET host = '%' WHERE user = 'root';
+# 修改密码
+SET PASSWORD FOR 'username'@'host' = PASSWORD('newpassword');
+# 删除用户
+DROP USER 'username'@'host';
+```
+
+授权
+
+```bash
+GRANT all privileges ON jrtz_hg.* TO 'username'@'192.168.1%'' identified by '密码';
+GRANT select,INSERT,update,delete ON jrtz_hg.* TO 'username'@'192.168.1%' identified by '密码';
+flush privileges;
+# 查看
+show grants;
+# 撤销授权
+REVOKE ALL ON jrtz_hg.* TO 'username'@'192.168.1%'' identified by '密码';
+```
+
+
 
 # 安装错误说明
 

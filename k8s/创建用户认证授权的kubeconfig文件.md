@@ -298,4 +298,9 @@ echo $DASHBOARD_LOGIN_TOKEN
 ```
 
 ---
+## 同步数据测试
+
+```bash
+kubectl create rolebinding datax-binding --clusterrole=datax --serviceaccount=jrtzcloud:datax --namespace=quotes
+```
 

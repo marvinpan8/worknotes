@@ -75,7 +75,8 @@ setup(
 注意，这里只是最基本的参考例子，执行打包会报警告，说缺少一些需要的文件，比如MANIFEST.in、readme.txt等等，暂时忽略即可。正式的项目中会复杂很多，甚至需要用到setuptools来扩展。这部分可以参考其他文档
 
 - 为了保证效果，在打包之前我们可以验证setup.py的正确性。执行代码`python3 setup.py check`，输出一般是running check，如果有错误或者警告，就会在此之后显示.没有任何显示表示Distutils认可你这个setup.py文件
-- 执行`python3 setup.py sdist upload -r pypi`创建发布并上传,如果想先上传到测试平台，可以执行python setup.py sdist upload -r pypitest，成功后再执行上面命令上传到正式平台。注意，这一步的配置文件里面由于pypi的发布机制更新导致有一些坑的出现，后面会讲述
+- 执行`python3 setup.py sdist upload -r pypi`创建发布并上传,
+- 如果想先上传到测试平台，可以执行 `python setup.py sdist upload -r pypitest`，成功后再执行上面命令上传到正式平台。注意，这一步的配置文件里面由于pypi的发布机制更新导致有一些坑的出现，后面会讲述
 
 ## 踩坑记录
 

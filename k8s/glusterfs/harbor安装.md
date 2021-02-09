@@ -25,10 +25,13 @@ helm install --namespace harbor-sit --name harbor-sit .
 ### 下载登录证书,  存储为ca.crt
 
 ```bash
-kubectl get secrets/harbor-sit-harbor-ingress -n harbor-sit -o jsonpath="{.data.ca\.crt}" | base64 --decode
+kubectl get secrets/harbor-sit-ingress-tls -n harbor-sit -o jsonpath="{.data.ca\.crt}" | base64 --decode
 ```
 
-#### 拷贝ssl证书
+#### 拷贝ssl证书（正式证书可不做）
+
+****
+
 ```bash
 # 测试环境
 for n in `seq -w 01 06`;do ssh node-$n "mkdir -p /etc/docker/certs.d/harbor-sit.jrtzcloud.cn";done
@@ -97,7 +100,7 @@ harbor-chartmuseum
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /chart_storage
 ```
 
-harbor-redis
+harbor-redis（可外接redis）
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /var/lib/redis
