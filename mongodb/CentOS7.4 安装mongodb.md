@@ -275,15 +275,11 @@ auth = true #用户认证
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-af2dd4027d4e1041.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/873/format/webp)
 
-image.png
-
 3、启动数据库,请参照前文方法，如图：
 
 
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-ca002bc6a994660d.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/642/format/webp)
-
-image.png
 
 插曲：在添加用户名之前应该先执行./mongo命令先打开mongodb数据库
  来自网友@OldX_cea8
@@ -325,6 +321,16 @@ show collections
 ```
 
 执行完后，ctrl + c结束shell，并通过关闭，打开进行重启数据库。
+
+jrtz行情查看角色连接
+
+```properties
+mongo_quo_stock_url = "mongodb://quotes_viewer:quotes_viewerinvest2020@192.168.10.230:27017/quotes_stock"
+mongo_quo_index_url = "mongodb://quotes_viewer:quotes_viewerinvest2020@192.168.10.230:27017/quotes_index"
+mongo_quo_info_url = "mongodb://quotes_viewer:quotes_viewerinvest2020@192.168.10.230:27017/quotes_info"
+```
+
+
 
 5、查看内存、连接数
 
