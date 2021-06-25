@@ -2,7 +2,7 @@
 
 ## 创建PVC
 ```bash
-# 测试环境
+# SIT环境
 kubectl apply -f pvc-harbor-sit.yaml
 # 查看卷
 kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
@@ -17,10 +17,12 @@ kubectl apply -f secret-ing-tls.yaml
 # 修改values.yaml中的 secretName，notarySecretName值为 harbor-sit-ingress-tls
 vim /jrtz/harbor/harbor-sit/values.yaml
 ------------------------------------------------------
-# 测试环境
+# 安装 harbor
 cd /jrtz/harbor/harbor-sit
 helm install --namespace harbor-sit --name harbor-sit .
 ------------------------------------------------------
+# 删除 harbor
+helm delete harbor-sit --purge
 ```
 ### 下载登录证书,  存储为ca.crt
 
@@ -82,31 +84,31 @@ kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
 
 ### 共享存储目录5个
 
-harbor-registry
+**harbor-registry**
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /storage
 ```
 
-harbor-database
+**harbor-database**
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af  500G  5.4G  495G   2% /var/lib/postgresql/data
 ```
 
-harbor-chartmuseum
+**harbor-chartmuseum**
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /chart_storage
 ```
 
-harbor-redis（可外接redis）
+**harbor-redis（可外接redis）**
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /var/lib/redis
 ```
 
-harbor-jobservice
+**harbor-jobservice**
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /var/log/jobs
@@ -146,3 +148,12 @@ imagePullSecrets:
 - name: drone
 ```
 
+---
+
+## 问题记录
+
+**1、clair总是重启**
+
+PS： vim /jrtz/harbor/harbor-sit/templates/clair/clair-dpl.yaml
+
+**在 livenessProbe 和 readinessProbe 中新增 timeoutSeconds: 5  和  periodSeconds: 30**

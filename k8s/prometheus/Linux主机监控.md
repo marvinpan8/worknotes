@@ -25,8 +25,7 @@ tar -zxvf node_exporter-1.1.2.linux-amd64.tar.gz
 **3、移动并进入目录**
 
 ```
-mv node_exporter-1.1.2.linux-amd64 /usr/local/bin/node_exporter
-cd /usr/local/bin/node_exporter
+mv node_exporter-1.1.2.linux-amd64/node_exporter /usr/local/bin/
 ```
 
 **4、启动node_exporter服务，默认9100端口**

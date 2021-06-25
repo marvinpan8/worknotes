@@ -37,6 +37,19 @@ SLOWLOG LEN
 # 清空
 SLOWLOG RESET
 ```
+```bash
+127.0.0.1:6379> SLOWLOG GET 3
+
+1) 1) (integer) 14                # 唯一性(unique)的日志标识符
+   2) (integer) 1522808219        # 被记录命令的执行时间点，以 UNIX 时间戳格式表示
+   3) (integer) 16                # 查询执行时间，以微秒为单位
+   4) 1) "keys"                   # 执行的命令，以数组的形式排列
+      2) "*"                      # 这里完整的命令是 "keys *"
+   5) "192.168.10.224:62918"      # 客户端IP和端口
+```
+
+
+
 ### 开机自启动
 
 vim /etc/systemd/system/redis.service 

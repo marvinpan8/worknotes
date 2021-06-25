@@ -44,23 +44,13 @@ VRRP双方节点都启动以后，要实现状态转换的，刚开始启动的�
 
 **实验环境：**
 
-
-
 虚拟主机版本：
-
-
 
 CentOS6.4-i686
 
-
-
 两个节点：
 
-
-
 node1.limian.com 172.16.6.1
-
-
 
 node2.limian.com 172.16.6.10
 
@@ -68,23 +58,13 @@ node2.limian.com 172.16.6.10
 
 **准备**
 
-
-
 1、节点一：
-
-
 
 同步时间：
 
-
-
 [root@node1 ~]# ntpdate 172.16.0.1
 
-
-
 安装keepalived
-
-
 
 [root@node1 ~]# yum -y install keepalived
 
@@ -94,17 +74,9 @@ node2.limian.com 172.16.6.10
 
 
 
-
-
 **三、利用keepalived 实现主从VIP的切换**
 
-
-
 **3.1我们修改下keepalived的配置文件：**
-
-
-
-
 
 ```as3
 [root@node1 ~]# cd /etc/keepalived/
@@ -112,17 +84,7 @@ node2.limian.com 172.16.6.10
 [root@node1 keepalived]# vim keepalived.conf
 ```
 
-
-
-
-
 **3.2全局阶段**
-
-
-
-
-
-
 
 ```as3
 global_defs {
@@ -136,15 +98,7 @@ global_defs {
 }
 ```
 
-
-
-
-
 **3.3****定义****vrrp阶段**
-
-
-
-
 
 ```as3
 vrrp_instance VI_1 {          //定义虚拟路由，VI_1 为虚拟路由的标示符，自己定义名称
@@ -167,10 +121,6 @@ vrrp_instance VI_1 {          //定义虚拟路由，VI_1 为虚拟路由的标�
 
 这样我们主节点的配置文件就修改好了，需要复制到从节点上，再做适当的修改就可以使用了
 
-
-
-
-
 ```as3
 [root@node1 keepalived]# scp keepalived.conf 172.16.6.1:/etc/keepalived/
 ```
@@ -178,8 +128,6 @@ vrrp_instance VI_1 {          //定义虚拟路由，VI_1 为虚拟路由的标�
 
 
 **3.4****登录到从节点****;**
-
-
 
 ```as3
 [root@node2 ~]# cd /etc/keepalived/
@@ -221,17 +169,9 @@ vrrp_instance VI_1 {
 
 [root@node2 keepalived]# service keepalived start
 
-
-
 把主节点上的服务停掉，看VIP会不会到从节点上
 
-
-
 [root@node2 ~]# ip addr show
-
-
-
-
 
 
 
