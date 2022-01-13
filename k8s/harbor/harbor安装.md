@@ -23,6 +23,10 @@ helm install --namespace harbor-sit --name harbor-sit .
 ------------------------------------------------------
 # 删除 harbor
 helm delete harbor-sit --purge
+-----------------------------------------------------
+# 若UI显示镜像大小为0，可执行垃圾回收后正常, 进入 registry 镜像执行垃圾回收
+$ k exec -it harbor-sit-harbor-registry-5bb4997449-x55st bash
+$ /usr/bin/registry garbage-collect /etc/registry/config.yml
 ```
 ### 下载登录证书,  存储为ca.crt
 
@@ -72,12 +76,16 @@ kubectl apply -f pvc-harbor-sit.yaml
 # 查看pvc已经修改为600Gi
 kubectl get pvc,pv --all-namespaces
 # 再次进入 harbor-registry容器中
-$ kubectl exec -it harbor-sit-harbor-registry-57cc584dd8-4zr92 bash
+$ kubectl exec -it harbor-sit-harbor-registry-f7bc56f95-2bswp bash
 # 挂载已经调整为 600G
 root [ / ]# df -h
 192.168.10.113:vol_fc798971b1e11fff8206961fcc79cd63 600G  6.1G  594G   2% /storage
 # 查看卷
 kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
+
+# 老的磁盘 和新的磁盘共存，没有进行均匀分布，rebalance 有问题，会hung住
+gluster volume list
+gluster volume rebalance <VOLNAME> {start|stop|status}
 ```
 
 ---
@@ -86,11 +94,15 @@ kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
 
 **harbor-registry**
 
+镜像文件主要存储在  /storage
+
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /storage
 ```
 
 **harbor-database**
+
+pg文件，目前有 550M
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af  500G  5.4G  495G   2% /var/lib/postgresql/data
@@ -98,17 +110,23 @@ kubectl exec -it glusterfs-2dpkq gluster volume status -n glusterfs
 
 **harbor-chartmuseum**
 
+空目录无数据
+
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /chart_storage
 ```
 
 **harbor-redis（可外接redis）**
 
+dump.rdb
+
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /var/lib/redis
 ```
 
 **harbor-jobservice**
+
+空目录无数据
 
 ```bash
 192.168.10.113:vol_6ea20ff6008f08c7d618536865f1f7af 500G  5.3G  494G   2% /var/log/jobs
@@ -157,3 +175,21 @@ imagePullSecrets:
 PS： vim /jrtz/harbor/harbor-sit/templates/clair/clair-dpl.yaml
 
 **在 livenessProbe 和 readinessProbe 中新增 timeoutSeconds: 5  和  periodSeconds: 30**
+
+**2、若UI镜像大小为0，可执行垃圾回收后正常**
+
+```bash
+$ k exec -it harbor-sit-harbor-registry-5bb4997449-x55st bash 
+$ /usr/bin/registry garbage-collect /etc/registry/config.yml
+-------------------------------------------------------------
+# 批量删除镜像, 清理镜像，登录批量push，登出
+docker images | grep harbor-test | awk 'BEGIN{OFS=":"}{print $1,$2}' | xargs docker rmi
+bash ~/clearDockerNone.sh
+docker login  -u drone -p 'Invest0755)&%%' harbor-sit.jrtzcloud.cn
+docker images | grep harbor-sit | awk 'BEGIN{OFS=":"}{print $1,$2}'|xargs -t -l docker push
+docker logout harbor-sit.jrtzcloud.cn
+
+# 清理镜像
+docker image prune -a -f
+```
+

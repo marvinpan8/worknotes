@@ -70,3 +70,38 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 ```
+
+---
+
+## 问题记录
+
+### 1. [Redis连接数居高不下的问题](https://www.cnblogs.com/qingyanxiaochen/p/11091439.html)
+
+有一天生产环境的API发现大部分都无法链接，查日志发现是redis报错，主要的错误信息为 
+
+```
+ERR max number of clients reached
+```
+
+通过命令`info clients`  查询，发现连接数超高
+
+```bash
+# Clients
+connected_clients:9793
+client_recent_max_input_buffer:2
+client_recent_max_output_buffer:0
+blocked_clients:0
+```
+
+由于redis默认连接数最大值为10000，导致无法连接redis而出现错误。
+之后用 client list  导出结果，发现链接的是 900+，属于正常的连接数。
+
+使用 `config get timeout`  命令查看连接超时时间
+
+```bash
+1) "timeout"
+2) "0"
+```
+
+使用 `client list`  命令查看客户端列表，查看具体连接数多的DB
+

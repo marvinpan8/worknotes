@@ -33,19 +33,17 @@ $ tar zxvf mongodb-linux-x86_64-4.0.0.tgz
 $ mv mongodb-linux-x86_64-4.0.0 mongodb
 ```
 
-第一步是解压缩，第二步是重命名，如图所示。
-
-
-
-![img](https:////upload-images.jianshu.io/upload_images/2103305-9cab80ce464ad5d3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/629/format/webp)
+第一步是解压缩，第二步是重命名，如图所示
 
 解压缩
 
+![img](https:////upload-images.jianshu.io/upload_images/2103305-9cab80ce464ad5d3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/629/format/webp)
 
+重命名
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-5a458bbfca75960a.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/535/format/webp)
 
-重命名
+
 
 4、配置环境变量
 
@@ -67,11 +65,9 @@ $ cd ~
 $ source /etc/profile
 ```
 
-
+设置环境变量
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-e6254a19c956fe7c.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/627/format/webp)
-
-设置环境变量
 
 5、创建数据库目录
 
@@ -177,8 +173,6 @@ $ systemctl status mongodb
  官网下载robo 3t  [https://robomongo.org/download](https://links.jianshu.com/go?to=https%3A%2F%2Frobomongo.org%2Fdownload)
  安装完后配置。
 
-
-
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-32da1842deecb61d.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/657/format/webp)
 
 点击creat
@@ -186,8 +180,6 @@ $ systemctl status mongodb
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-64f76a9acb8f5e14.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/543/format/webp)
 
 请原封不动填写
-
-
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-5030658381e9e09f.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/549/format/webp)
 
@@ -246,8 +238,6 @@ $ vim mongodb.conf
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-3127712b1e965dde.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/803/format/webp)
 
-image.png
-
 我们把noauth那一行，前面加上#，注释掉。
  再在最后一行添加 auth = true
  完整代码如下：
@@ -271,13 +261,9 @@ auth = true #用户认证
 
 2、关闭数据库，前文已经提到了方法，我这里只做操作，如图：
 
-
-
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-af2dd4027d4e1041.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/873/format/webp)
 
 3、启动数据库,请参照前文方法，如图：
-
-
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-ca002bc6a994660d.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/642/format/webp)
 
@@ -330,8 +316,6 @@ mongo_quo_index_url = "mongodb://quotes_viewer:quotes_viewerinvest2020@192.168.1
 mongo_quo_info_url = "mongodb://quotes_viewer:quotes_viewerinvest2020@192.168.10.230:27017/quotes_info"
 ```
 
-
-
 5、查看内存、连接数
 
 ```bash
@@ -341,37 +325,22 @@ db.serverStatus().mem
 db.serverStatus().connections
 ```
 
-
-
-
-
 6、通过robo 3t连接。
- connection标签页
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-3dab6623cc509678.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/537/format/webp)
 
-connection标签页
 
-authentication标签页
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-62518bf6d0393f72.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/544/format/webp)
 
-authentication标签页
 
-ssh标签页
 
 ![img](https:////upload-images.jianshu.io/upload_images/2103305-7a159b6f4f1a787b.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/539/format/webp)
 
-ssh标签页
+
 
 点击save后，连接即可，如果出现报错，请核对自己输入的信息是否有误。
 
 ---------------------------------------------------------------------------------------------------------
 
-作者：派大C
-
 链接：https://www.jianshu.com/p/994bc7b19b26
-
-来源：简书
-
-简书著作权归作者所有，任何形式的转载都请联系作者获得授权并注明出处。
