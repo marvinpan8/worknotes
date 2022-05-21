@@ -15,6 +15,7 @@
   tail -f -n 500 /var/log/glusterfs/bricks/var-lib-heketi-mounts-vg_099dabdc48c0ce612fb3a4e29719398b-brick_78c017e9a79f93fb658f0010fcd8e95d-brick.log
   # 查brick进程
   ps -ef | grep /usr/sbin/glusterfsd |wc -l
+  ps aux | grep glusterfsd | grep brick-port 
   ```
 
 - **如果挂载正常，重启glusterd，还是启动不了主机的brick进程，则重启docker正常**
@@ -69,7 +70,7 @@ $ systemctl restart glusterd.service
 
 ```bash
 #  注意Online项全部为“Y”，每个brick 一个进程
-$ gluster volume status vol_ad9fb74d81366e566b0fbf6f1bae9fd8
+$ gluster volume status vol_1073f8239a178186946d391ad207ac44
 Status of volume: gv0
 Gluster process                             TCP Port  RDMA Port  Online  Pid
 ------------------------------------------------------------------------------
@@ -92,8 +93,6 @@ There are no active volume tasks
 
 ### 查看主机上的挂载目录
 
-df -h
-
 ```bash
 $ df -h
 Filesystem  Size  Used Avail Use%   Mounted on
@@ -105,7 +104,7 @@ Filesystem  Size  Used Avail Use%   Mounted on
 
 - ~~**软链接： **~~
 
-  其中 `/dev/mapper/vg_2f11cd7f4e0164ac2edb3832bf3d0906-brick_6e50b9f96537440c28df0ff63d56bf83 `为一个块设备的软链接（l开头的文件）。
+  其中 `/dev/mapper/vg_2f11cd7f4e0164ac2edb3832bf3d0906-brick_6e50b9f96537440c28df0ff63d56bf83 `为一个块设备的软链接（l 开头的文件）。
 
   如下，挂载到/dev/dm-37的块设备
 
@@ -125,8 +124,6 @@ ln -d ../dm-39 vg_fbce95ef571b0e6e34d8a888feb3758c-brick_33ad154221d44c66322f801
 ```
 
 从前面对比，可以发现**3个块设备**未 `mount`
-
-fdisk -l    
 
 ```bash
 $ fdisk -l
@@ -170,7 +167,7 @@ I/O size (minimum/optimal): 262144 bytes / 262144 bytes
 
 ```bash
 # 先进入对应143主机的容器
-$ exec -it glusterfs-hjjtx  bash
+$ k exec -it glusterfs-hjjtx  bash
 # 查看文件系统类型
 $ findmnt
 -------------------------------------

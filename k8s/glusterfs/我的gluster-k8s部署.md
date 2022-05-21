@@ -2,7 +2,7 @@
 
 - 安装Glusterfs客户端：每个kubernetes集群的节点需要安装gulsterfs的客户端，
 ```bash
-yum  -y  install centos-release-gluster41.noarch
+yum -y install centos-release-gluster41.noarch
 yum -y install glusterfs-client
 ```
 - 加载内核模块：每个kubernetes集群的节点运行

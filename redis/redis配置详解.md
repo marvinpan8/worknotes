@@ -165,7 +165,7 @@ slave-priority 100
 # min-slaves-max-lag 10
 ################################## 安全保证###################################
 #是否需要开启密码验证（一般情况下，并不需要）,Redis 性能相当高，大约每秒处理大约150k请求，因此密码最好很长，不然直接就暴力破解了
-# requirepass foobared
+requirepass foobared
 
 # 修改命令的名字为新的字符，比如 rename-command CONFIG b840fc02d524045429941cc15f59e41cb7be6c52
 # 这样的话 客户端只能用过 b840fc02d524045429941cc15f59e41cb7be6c52 来达到 config的的效果，当rename-command CONFIG “” 时，CONFIG命令就会失效
@@ -176,7 +176,7 @@ slave-priority 100
 
 ################################### 限制 ####################################
 #设定Redis同时最大的客户端连接数量，默认情况为10000，如果Redis无法从配置文件进行配置，Redis将会设定为当前文件的限制减去32；
-# maxclients 10000
+maxclients 10000
 # 是否开启持久化机制，如果否，那么一切持久化相关配置都会失效。比如RDB（内存数据快照）&AOF(操作记录AppendOnlyFile)
 # persistence-available [(yes)|no]
 

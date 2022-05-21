@@ -275,7 +275,7 @@ object WordCount {
 
 > 小提示
 >
-> 这里可以利用Ctrl+A全选功能，选中全部选项，然后，配合Crtl+鼠标左键进行反选，也就是按住Ctrl键的同时用鼠标左键分别点击WordCount.jar和‘WordCount’ compile output，从而不选中这两项，最后，点击页面中的删除按钮（是一个减号图标），这样就把其他选项都删除，只保留了WordCount.jar以及‘WordCount’ compile output。
+> 这里可以利用Ctrl+A全选功能，选中全部选项，然后，配合Crtl+鼠标左键进行反选，也就是按住Ctrl键的同时用鼠标左键分别点击**WordCount.jar和‘WordCount’ compile output**，从而不选中这两项，最后，点击页面中的删除按钮（是一个减号图标），这样就把其他选项都删除，只保留了WordCount.jar以及‘WordCount’ compile output。
 
 ![img](assets/20.png)
 

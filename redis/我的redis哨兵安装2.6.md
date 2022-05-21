@@ -197,8 +197,6 @@ Description=Redis slave2 Server
 ExecStart=/jrtz/redis/slave1/src/redis-server /jrtz/redis/slave2/redis.conf
 ```
 
-
-
 #### 启动
 
 ```bash
@@ -255,8 +253,6 @@ Description=Redis slave2 sentinel Server
 ....
 ExecStart=/jrtz/redis/slave1/src/redis-server /jrtz/redis/slave1/sentinel.conf --sentinel
 ```
-
-
 
 #### 启动sentinel
 
@@ -340,7 +336,7 @@ systemctl restart redisslave2 && systemctl restart redissentinel2
 
 - 按奇数个部署，至少要部署3个，哨兵之间、Redis实例之间物理机独立。
 
-- sentinel monitor master xxx.xxx.xxx.xxx xxxx 1 哨兵的这个配置最好不要配置为1。quorum的值为1意味着只要一个sentinel发现master节点无响应就可以标记为客观下线，从而发起主从切换，quorum最好设置超过sentinel个数的一半向上取整。
+- sentinel monitor master xxx.xxx.xxx.xxx xxxx 2 哨兵的这个配置最好不要配置为1。quorum的值为1意味着只要一个sentinel发现master节点无响应就可以标记为客观下线，从而发起主从切换，quorum最好设置超过sentinel个数的一半向上取整。
 
 - entinel failover-timeout master 900000 //毫秒级； 条件允许的情况下尽可能缩短这个切换间隔吧。
 
