@@ -1,9 +1,5 @@
 # redis 一主两从三哨兵模式搭建记录
 https://www.cnblogs.com/fly-piglet/p/9836314.html
-### 目的:
-
-让看看这篇文章的的人能够知道：软件架构、软件的安装、配置、基本运维的操作、高可用测试、也包含我自己，能够节省对应的时间。
-
 ### 软件架构：
 
 生产环境使用三台服务器搭建redis哨兵集群，3个redis实例（1主2从）+ 3个哨兵实例。生产环境能够保证在哨兵存活两台的情况下，只有一台redis能够继续提供服务（一主两从三哨兵）
@@ -28,22 +24,29 @@ systemctl start redis && systemctl start redis-sentinel
 
 #### /etc/redis.conf（主库配置）
 
+mkdir data logs
+
 ```bash
 # 修改redis配置文件：/etc/redis.conf
 # 1. 修改绑定ip为服务器内网ip地址，做绑定，三台各自填写各自的ip地址
 bind 192.168.10.214
 # 2. 保护模式修改为否，允许远程连接
 protected-mode no
+# 开启作为守护进程运行，从而生成 pidfile
+daemonize yes
+pidfile /var/run/redis_6379.pid
+# 3. log
+logfile "./logs/redis.log"
+dir ./data/
 # 4. 设定密码
-requirepass investoday
+requirepass zaq1xsw2
 # 5. 设定主库密码与当前库密码同步，保证从库能够提升为主库
-masterauth investoday
+masterauth zaq1xsw2
 # 6. 关闭AOF持久化支持
 # appendonly no
 # 优先级 80， 越小越优先
 slave-priority 80
--------------------
-replica-priority
+replica-priority 80
 #redis主从复制配置,slaves数量,网络延迟的最大值
 min-replicas-to-write 1
 min-replicas-max-lag 10
@@ -53,6 +56,7 @@ min-slaves-max-lag 10
 # 最大内存物理内存的3/4，
 # 本例：16G=17179869184 byte(B) * 3/4 = 12884901888
 # 64G=68719476736  byte(B) * 3/4 = 51539607552
+# 8G=8589934592 byte(B) * 3/4 = 6442450944
 maxmemory 12884901888
 #内存策略，不驱逐
 maxmemory-policy noeviction
@@ -63,15 +67,18 @@ maxmemory-policy noeviction
 基本配置和主库相同，bindip地址各自对应各自的。需要添加主库同步配置
 
 ```bash
+bind 192.168.10.XXX
 # 主库为主虚拟机1的地址
 slaveof 192.168.10.214 6379
-replicaof 
+replicaof 192.168.10.214 6379
 # 优先级90,80
 slave-priority 90
-replica-priority
+replica-priority 90
 ```
 
 #### /etc/redis-sentinel.conf（哨兵配置）
+
+mkdir logs tmp
 
 ```bash
 # 修改redis-sentinel配置文件：/etc/redis-sentinel.conf
@@ -79,6 +86,12 @@ replica-priority
 bind 192.168.10.214
 # 2. 保护模式修改为否，允许远程连接
 protected-mode no
+# 开启作为守护进程运行，从而生成 pidfile
+daemonize yes
+pidfile /data/app/redis/redis-sentinel.pid
+
+logfile "/data/app/redis/logs/sentinel.log"
+dir /data/app/redis/tmp
 # 3. 设定sentinel myid 每个都不一样,使用yum安装的时候，直接就生成了
 # 每个都不一样 每个都不一样 每个都不一样
 sentinel myid 04d9d3fef5508f60498ac014388571e719188527  
@@ -93,6 +106,12 @@ sentinel failover-timeout mymaster 15000
 sentinel parallel-syncs mymaster 2
 # 8. 主数据库密码,需要将配置放在sentinel monitor master 192.168.10.214 6379 2下面
 sentinel auth-pass mymaster investoday
+
+# 默认配置
+acllog-max-len 128
+sentinel deny-scripts-reconfig yes
+SENTINEL resolve-hostnames no
+SENTINEL announce-hostnames no
 ```
 
 > 注意：含有mymaster的配置，都必须放置在 sentinel monitor mymaster 192.168.10.214 6379 2 之后，否则会出现问题

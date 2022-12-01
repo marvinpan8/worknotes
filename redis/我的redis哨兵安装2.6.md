@@ -19,12 +19,16 @@ make test
 \o/ All tests passed without errors!
 # 报错
  You need tcl 8.5 or newer in order to run the Redis test
-# 安装tcl
+ ---------------------------------------------------------------------------
+# 安装tcl 第一种方式：rpm包安装（推荐）
+rpm -i tcl-8.5.13-8.el7.x86_64.rpm
+# 安装tcl 第二种方式：gz包安装（不推荐）
 wget http://downloads.sourceforge.net/tcl/tcl8.6.1-src.tar.gz  
-tar xzvf tcl8.6.1-src.tar.gz  -C /usr/local/  
+tar -zxvf tcl8.6.1-src.tar.gz  -C /usr/local/  
 cd  /usr/local/tcl8.6.1/unix/  
 ./configure  
-make & make install
+make && make install
+---------------------------------------------------------------------------
 # 再次进入redis目录
 make test
 # 正常显示
