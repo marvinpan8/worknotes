@@ -8,13 +8,13 @@ https://www.cnblogs.com/fly-piglet/p/9836314.html
 
 生产环境使用三台服务器搭建redis哨兵集群，3个redis实例（1主2从）+ 3个哨兵实例。生产环境能够保证在哨兵存活两台的情况下，只有一台redis能够继续提供服务（一主两从三哨兵）
 
-| 主虚拟机1      | 从虚拟机2     | 从虚拟机3     |
+| 主节点1 | 从节点2   | 从节点3   |
 | -------------- | ------------- | ------------- |
 | 192.168.10.214 | 192.168.10.225 | 192.168.10.148 |
 
 #### 软件安装：分别在三台机器上通过yum进行redis的下载和安装以及开机启动
 
-```bash
+```properties
 # 添加软件安装源
 yum install epel-release
 # 安装redis
@@ -28,7 +28,7 @@ systemctl start redis && systemctl start redis-sentinel
 
 #### /etc/redis.conf（主库配置）
 
-```bash
+```properties
 # 修改redis配置文件：/etc/redis.conf
 # 1. 修改绑定ip为服务器内网ip地址，做绑定，三台各自填写各自的ip地址
 bind 192.168.10.214
@@ -62,7 +62,7 @@ maxmemory-policy noeviction
 
 基本配置和主库相同，bindip地址各自对应各自的。需要添加主库同步配置
 
-```bash
+```properties
 # 主库为主虚拟机1的地址
 slaveof 192.168.10.214 6379
 replicaof 
@@ -73,7 +73,7 @@ replica-priority
 
 #### /etc/redis-sentinel.conf（哨兵配置）
 
-```bash
+```properties
 # 修改redis-sentinel配置文件：/etc/redis-sentinel.conf
 # 1. 绑定的地址
 bind 192.168.10.214
@@ -99,7 +99,7 @@ sentinel auth-pass mymaster investoday
 
 #### 3. 重新启动
 
-```bash
+```properties
 # 启动需要按照 Master -> Slave -> Sentinel 的顺序进行启动
 # 启动redis
 systemctl restart redis
@@ -111,7 +111,7 @@ systemctl restart redis-sentinel
 
 #### 1. 连接redis脚本
 
-```bash
+```properties
 # 主虚拟机1
 redis-cli -h 192.168.10.214 -p 6379 -a investoday
 # 从虚拟机2
@@ -122,7 +122,7 @@ redis-cli -h 192.168.10.148 -p 6379 -a investoday
 
 #### 2. 同步状态查看
 
-```bash
+```properties
 # 连接完成后输入命令
 info replication
 # 主库显示如下，即可算完成（包含两个从库ip地址）
@@ -157,7 +157,7 @@ repl_backlog_histlen:0
 
 #### 3. 主库写入测试同步
 
-```bash
+```properties
 # 主虚拟机1
 set b b
 # 从虚拟机2
@@ -170,7 +170,7 @@ get b
 
 #### 4. 从库只读测试
 
-```bash
+```properties
 # 从虚拟机2
 set c c
 # result : (error) READONLY You can't write against a read only slave.
@@ -181,14 +181,14 @@ set c c
 
 #### 5. 成功redis-sentinel日志
 
-```bash
+```properties
 # 查看日志：
 $ tailf /var/log/redis/sentinel.log
 ```
 
 成功日志，**+slave slave包含两台从库的地址，+sentinel sentinel包含两台哨兵的id**
 
-```bash
+```properties
 57611:X 21 Oct 02:03:27.777 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
 57611:X 21 Oct 02:03:27.777 # Sentinel ID is 42975048e2f70d0f4d718f77427930c16bc0b522
 57611:X 21 Oct 02:03:27.777 # +monitor master mymaster 192.168.10.214 6379 quorum 2
@@ -200,7 +200,7 @@ $ tailf /var/log/redis/sentinel.log
 
 #### 6. 成功sentinel的连接状态
 
-```bash
+```properties
 # 主虚拟机1
 $ redis-cli -h 192.168.10.214 -p 26379 INFO Sentinel
 # result：
@@ -238,7 +238,7 @@ redis服务，至少需要存活一台，才能保证服务正常运行sentinel 
 哨兵高可用测试：分别连接对应的redis服务端，手动停止哨兵，停止主reids服务，看主从是否切换成功。
 三哨兵情况：redis实例挂掉两台，剩下一台能够成为主，自动切换
 
-```bash
+```properties
 # 保持三个哨兵进程都存在的情况下
 # 1. 三个终端分别连接redis，使用info replication查看当前连接状态：
 # 主虚拟机1
@@ -260,7 +260,7 @@ systemctl stop redis
 
 两哨兵情况：redis实例挂掉两台，剩下一台能够成为主，自动切换
 
-```bash
+```properties
 # 将全部虚拟机的redis + sentinel重新启动
 systemctl start redis && systemctl start redis-sentinel
 # 停止虚拟机1的redis-sentinel，重新执行哨兵的案例测试
@@ -270,7 +270,7 @@ systemctl stop redis && systemctl stop redis-sentinel
 
 一哨兵情况：redis实例无法主从切换
 
-```bash
+```properties
 # 将全部虚拟机的redis + sentinel重新启动
 systemctl start redis && systemctl start redis-sentinel
 # 停止虚拟机1和2d的redis-sentinel，重新执行哨兵的案例测试
@@ -286,7 +286,7 @@ systemctl stop redis-sentinel
 
 #### 基本命令操作
 
-```bash
+```properties
 # 启动
 systemctl start redis && systemctl start redis-sentinel
 # 重启

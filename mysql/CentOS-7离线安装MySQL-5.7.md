@@ -16,9 +16,9 @@
 
 1. MySQL 5.7 Linux安装包下载：https://dev.mysql.com/downloads/mysql/
 
-   ![下载MySQL 5.7](assets/jellythinkcentosmysqlinstall1.png)
+2. 选择 mysql-5.7.21-linux-glibc2.12-x86_64.tar
 
-2. 查询并卸载系统自带的Mariadb
+3. 查询并卸载系统自带的Mariadb
 
    ```bash
    rpm -qa | grep mariadb
@@ -208,15 +208,14 @@ innodb_buffer_pool_size = 内存的70%   #调大缓冲池
 
 查看配置变量
 
-```bash
+```properties
 show global variables;
 show variables like 'innodb_buffer_pool_size%'; 
-
 ```
 
 创建用户, 可以使用通配符%
 
-```bash
+```properties
 CREATE USER 'username'@'192.168.1%' IDENTIFIED BY 'password';
 # 查看
 SELECT host, user FROM user;
@@ -230,7 +229,7 @@ DROP USER 'username'@'host';
 
 授权
 
-```bash
+```properties
 GRANT all privileges ON jrtz_hg.* TO 'username'@'192.168.1%'' identified by '密码';
 GRANT select,INSERT,update,delete ON jrtz_hg.* TO 'username'@'192.168.1%' identified by '密码';
 flush privileges;
