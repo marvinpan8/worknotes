@@ -3,7 +3,7 @@
 - 修改内核参数
 
 ```bash
-vim /proc/sys/net/core/somaxconn
+cat /proc/sys/net/core/somaxconn
 echo 511 > /proc/sys/net/core/somaxconn
 #在/etc/sysctl.conf中添加如下
 net.core.somaxconn=511
