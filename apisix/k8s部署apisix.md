@@ -1,4 +1,4 @@
-# k8s部署api6
+# k8s部署apisix
 
 ### 创建 APISIX 配置文件：conf/config.yaml
 

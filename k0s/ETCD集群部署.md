@@ -1,25 +1,27 @@
-# ETCD集群安装
+# ETCD集群部署
 
-#### ETCD版本：3.6.4
+#### ETCD版本：3.6.9
+
+官网地址：https://github.com/etcd-io/etcd/tags
 
 ## 创建安装目录
 
 ```bash
-mkdir -p /k8s/etcd/{bin,cfg,ssl} 
+sudo mkdir -p /k8s/etcd/{bin,cfg,ssl} 
 # 创建数据目录
-mkdir -p /data/etcd/data /data/etcd/wal
+sudo mkdir -p /data/etcd/data /data/etcd/wal
 ```
 ## 解压安装文件
 
 ```properties
 mkdir ~/etcd && cd ~/etcd
-tar -xvf etcd-v3.6.4-linux-amd64.tar.gz
-rm -f etcd-v3.6.4-linux-amd64.tar.gz 
-cd etcd-v3.6.4-linux-amd64/
-cp etcd etcdctl /k8s/etcd/bin/
+tar -xvf etcd-v3.6.9-linux-amd64.tar.gz
+rm -f etcd-v3.6.9-linux-amd64.tar.gz 
+cd etcd-v3.6.9-linux-amd64/
+sudo cp etcd etcdctl /k8s/etcd/bin/
 
-cp /k8s/etcd/bin/etcdctl /usr/local/bin/
-cp /k8s/etcd/bin/etcd /usr/local/bin/
+sudo cp /k8s/etcd/bin/etcdctl /usr/local/bin/
+sudo cp /k8s/etcd/bin/etcd /usr/local/bin/
 
 # 校验
 etcd --version
@@ -28,7 +30,7 @@ etcdctl version
 ## etcd01
 
 ```properties
-cat << EOF | tee /k8s/etcd/cfg/etcd.conf
+sudo tee /k8s/etcd/cfg/etcd.conf << EOF
 name: 'etcd01'
 
 data-dir: /data/etcd/data
@@ -38,11 +40,11 @@ heartbeat-interval: 250
 election-timeout: 2000
 quota-backend-bytes: 6442450944
 
-listen-peer-urls: https://172.17.0.40:2380
-listen-client-urls: https://172.17.0.40:2379,https://127.0.0.1:2379
-initial-advertise-peer-urls: https://172.17.0.40:2380
-advertise-client-urls: https://172.17.0.40:2379
-initial-cluster: etcd01=https://172.17.0.40:2380,etcd02=https://172.17.0.41:2380,etcd03=https://172.17.0.42:2380
+listen-peer-urls: https://10.10.20.201:2380
+listen-client-urls: https://10.10.20.201:2379,https://127.0.0.1:2379
+initial-advertise-peer-urls: https://10.10.20.201:2380
+advertise-client-urls: https://10.10.20.201:2379
+initial-cluster: etcd01=https://10.10.20.201:2380,etcd02=https://10.10.20.202:2380,etcd03=https://10.10.20.203:2380
 
 initial-cluster-token: 'etcd-cluster'
 initial-cluster-state: 'new'
@@ -89,7 +91,7 @@ EOF
 ## etcd02
 
 ```properties
-cat << EOF | tee /k8s/etcd/cfg/etcd.conf
+sudo tee /k8s/etcd/cfg/etcd.conf << EOF
 name: 'etcd02'
 
 data-dir: /data/etcd/data
@@ -99,11 +101,11 @@ heartbeat-interval: 250
 election-timeout: 2000
 quota-backend-bytes: 6442450944
 
-listen-peer-urls: https://172.17.0.41:2380
-listen-client-urls: https://172.17.0.41:2379,https://127.0.0.1:2379
-initial-advertise-peer-urls: https://172.17.0.41:2380
-advertise-client-urls: https://172.17.0.41:2379
-initial-cluster: etcd01=https://172.17.0.40:2380,etcd02=https://172.17.0.41:2380,etcd03=https://172.17.0.42:2380
+listen-peer-urls: https://10.10.20.202:2380
+listen-client-urls: https://10.10.20.202:2379,https://127.0.0.1:2379
+initial-advertise-peer-urls: https://10.10.20.202:2380
+advertise-client-urls: https://10.10.20.202:2379
+initial-cluster: etcd01=https://10.10.20.201:2380,etcd02=https://10.10.20.202:2380,etcd03=https://10.10.20.203:2380
 
 initial-cluster-token: 'etcd-cluster'
 initial-cluster-state: 'new'
@@ -150,7 +152,7 @@ EOF
 ## etcd03
 
 ```properties
-cat << EOF | tee /k8s/etcd/cfg/etcd.conf
+sudo tee /k8s/etcd/cfg/etcd.conf << EOF
 name: 'etcd03'
 
 data-dir: /data/etcd/data
@@ -160,11 +162,11 @@ heartbeat-interval: 250
 election-timeout: 2000
 quota-backend-bytes: 6442450944
 
-listen-peer-urls: https://172.17.0.42:2380
-listen-client-urls: https://172.17.0.42:2379,https://127.0.0.1:2379
-initial-advertise-peer-urls: https://172.17.0.42:2380
-advertise-client-urls: https://172.17.0.42:2379
-initial-cluster: etcd01=https://172.17.0.40:2380,etcd02=https://172.17.0.41:2380,etcd03=https://172.17.0.42:2380
+listen-peer-urls: https://10.10.20.203:2380
+listen-client-urls: https://10.10.20.203:2379,https://127.0.0.1:2379
+initial-advertise-peer-urls: https://10.10.20.203:2380
+advertise-client-urls: https://10.10.20.203:2379
+initial-cluster: etcd01=https://10.10.20.201:2380,etcd02=https://10.10.20.202:2380,etcd03=https://10.10.20.203:2380
 
 initial-cluster-token: 'etcd-cluster'
 initial-cluster-state: 'new'
@@ -215,7 +217,7 @@ EOF
 ### 创建系统启动文件
 
 ```properties
-cat << EOF | tee /usr/lib/systemd/system/etcd.service 
+sudo tee /usr/lib/systemd/system/etcd.service << EOF
 [Unit]
 Description=Etcd Server
 After=network.target
@@ -225,7 +227,7 @@ Documentation=https://github.com/coreos
 
 [Service]
 Type=notify
-EnvironmentFile=/k8s/etcd/cfg/etcd
+# EnvironmentFile=/k8s/etcd/cfg/etcd
 ExecStart=/k8s/etcd/bin/etcd --config-file=/k8s/etcd/cfg/etcd.conf
 Restart=on-failure
 RestartSec=5
@@ -252,9 +254,9 @@ scp /usr/lib/systemd/system/etcd.service node03:/usr/lib/systemd/system/etcd.ser
 - 注意：启动ETCD集群同时启动二个节点，启动一个节点集群是无法正常启动的
 
 ```properties
-systemctl daemon-reload && systemctl enable etcd && systemctl restart etcd
-systemctl status etcd
-systemctl stop etcd
+sudo systemctl daemon-reload && sudo systemctl enable etcd && sudo systemctl start etcd
+sudo systemctl status etcd
+sudo systemctl stop etcd
 # 查看服务日志，看是否有错误信息，确保服务正常
 journalctl -f -u etcd
 # 更详细日志
@@ -266,7 +268,7 @@ tail -f /var/log/messages
 # 验证集群
 
 ```properties
-etcdctl --cacert=/k8s/etcd/ssl/ca.pem --cert=/k8s/etcd/ssl/client-cert.pem --key=/k8s/etcd/ssl/client-key.pem --endpoints="https://172.17.0.40:2379,https://172.17.0.41:2379,https://172.17.0.42:2379"  -w table member list
+etcdctl --cacert=/k8s/etcd/ssl/ca.pem --cert=/k8s/etcd/ssl/client-cert.pem --key=/k8s/etcd/ssl/client-key.pem --endpoints="https://10.10.20.201:2379,https://10.10.20.202:2379,https://10.10.20.203:2379"  -w table member list
 --------------------
 endpoint health
 

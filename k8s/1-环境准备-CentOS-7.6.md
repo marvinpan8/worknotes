@@ -1,3 +1,5 @@
+# k8s环境准备-CentOS-7.6
+
 本文是直接下载二进制安装，也可以进入[k8s的github](https://github.com/kubernetes/kubernetes),clone下来编译成二进制安装, 可查看本文件夹下《编译和运行Kubernetes源码》。
 
 ## 版本说明
@@ -132,8 +134,9 @@ SELINUX=disabled
 如果开启了 swap 分区，kubelet 会启动失败(可以通过将参数 --fail-swap-on 设置为 false 来忽略 swap on)，故需要在每台机器上关闭 swap 分区：
 
 ```properties
+# 临时关闭
 swapoff -a && sysctl -w vm.swappiness=0
-# 为了防止开机自动挂载 swap 分区，可以注释 /etc/fstab 中相应的条目：
+# 永久关闭。为了防止开机自动挂载 swap 分区，可以注释 /etc/fstab 中相应的条目：
 sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 cat /etc/fstab
 # 注释了下面这一行

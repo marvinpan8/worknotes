@@ -265,7 +265,6 @@ $ gluster volume status [all]
 $ gluster volume status [detail| clients | mem | inode | fd]
 
 #查看本节点的文件系统信息：
-
 $ df -lh
 #查看本节点的磁盘信息：
 $ fdisk -l

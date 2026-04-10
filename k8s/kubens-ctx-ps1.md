@@ -14,6 +14,7 @@ alias k='kubectl'
 alias kn='kubens'
 -----------------------------------
 source ~/.bash_profile
+source ~/.profile
 ```
 
 

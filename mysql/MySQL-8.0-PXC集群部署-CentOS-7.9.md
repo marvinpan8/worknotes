@@ -1,4 +1,4 @@
-# CentOS-7安装MySQL8.0-PXC集群
+# CentOS-7部署MySQL8.0-PXC集群
 
 - PXC官网：https://www.percona.com/mysql/software/percona-xtradb-cluster
 - MySQL官网：https://dev.mysql.com/doc/refman/8.0/en/x-plugin-options-system-variables.html
@@ -118,7 +118,7 @@ yum install -y percona-xtradb-cluster
 
 # ■■■【40】节点手动生成100年SSL证书
 
-#### 参考另一篇文章《SSL证书生成步骤》，证书目录在 /etc/mysql/certs/
+#### 参考另一篇文章《OpenSSL-1.0证书生成步骤》，证书目录在 /etc/mysql/certs/
 
 ```properties
 mkdir -p /etc/mysql/certs/ && cd /etc/mysql/certs/

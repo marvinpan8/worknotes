@@ -38,7 +38,7 @@ systemctl start mysql@bootstrap.service
 
 ​	示例，在对集群持续写入数据的情况下，依次关闭A、B、C，此时各节点的grastate.dat文件如下：
 
-节点A：
+节点A： sudo cat /data/mysql/data/grastate.dat
 
 ```properties
 # GALERA saved state
@@ -48,7 +48,7 @@ seqno: 1360
 safe_to_bootstrap: 0
 ```
 
-节点B：
+节点B：sudo cat /data/mysql/data/grastate.dat
 
 ```properties
 # GALERA saved state
@@ -58,7 +58,7 @@ seqno: 1361
 safe_to_bootstrap: 0
 ```
 
-节点C：
+节点C：sudo cat /data/mysql/data/grastate.dat
 
 ```properties
 # GALERA saved state
@@ -68,7 +68,26 @@ seqno: 1362
 safe_to_bootstrap: 1
 ```
 
-​	建议在完全关闭集群前停止对集群的写入，以便所有节点的seqno能够停在同一位置。否则低位节点重新启动时，必须完成完整的SST（State Snapshot Transfer）才能加入集群，集群启动速度变慢。
+### 启动集群
+
+```properties
+# 1. 节点C 因为 safe_to_bootstrap: 1  且 seqno最大 先启动
+mysqld --wsrep-new-cluster
+sudo systemctl start mysql@bootstrap
+sudo systemctl status mysql@bootstrap
+# 2. 节点B 因为 seqno 第二大 启动
+sudo systemctl start mysql@bootstrap
+sudo systemctl status mysql@bootstrap
+# 2. 节点A 因为 seqno 最小  最后启动
+sudo systemctl start mysql@bootstrap
+sudo systemctl status mysql@bootstrap
+```
+
+
+
+
+
+建议在完全关闭集群前停止对集群的写入，以便所有节点的seqno能够停在同一位置。否则低位节点重新启动时，必须完成完整的SST（State Snapshot Transfer）才能加入集群，集群启动速度变慢。
 
 ## 4、节点A异常关闭
 ​	当集群中的某个节点因为断电、硬件故障、内核奔溃、进程奔溃、kill -9 mysql_pid等原因而异常关闭时，此时节点会无法将最后执行位置写入grastate.dat，seqno值为运行时值 -1，如下：
