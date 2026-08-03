@@ -1,6 +1,6 @@
 ---
 
-# ■■■ apisix集群部署
+# ■■■ apisix集群部署-CentOS
 
 ## etcd 若是单节点需要创建更换crt证书
 

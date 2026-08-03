@@ -559,6 +559,10 @@ CREATE USER 'keymgr_user'@'pxc%' IDENTIFIED BY 'VsjX5nEcvymRaJ36';
 GRANT ALL PRIVILEGES ON `keymgr-prod`.* TO 'keymgr_user'@'pxc%';
 FLUSH PRIVILEGES;
 
+CREATE USER 'grafana_user'@'10.10.20.20_' IDENTIFIED BY '8Ke59lHREvaYipKp';
+GRANT ALL PRIVILEGES ON `grafana`.* TO 'grafana_user'@'10.10.20.20_';
+FLUSH PRIVILEGES;
+
 
 # 允许用户客户端的IP地址 10.244.开头能够访问
 CREATE USER 'cx_user'@'10.244.%' IDENTIFIED BY 'cx_admin';
@@ -860,7 +864,7 @@ journalctl -f -u proxysql
 ### 修改监听地址
 
 ```properties
-# 管理员登录
+# 管理员登录,禁用ssl
 mysql -u admin -pekemp2026 -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password --ssl-mode=DISABLED
 
 SHOW VARIABLES LIKE 'pgsql-interfaces%';
@@ -969,7 +973,9 @@ INSERT INTO mysql_servers (hostgroup_id, hostname, port) VALUES
 # 即时生效
 LOAD MYSQL SERVERS TO RUNTIME;
 SAVE MYSQL SERVERS TO DISK;
-
+```
+### 新增用户(1个节点都执行，自动同步)
+```properties
 # 3节点都是读写节点，不要 配置 Galera 自动分组 每个 ProxySQL 节点手动执行
 # 添加应用用户
 SELECT * FROM mysql_users;
@@ -979,7 +985,29 @@ INSERT INTO mysql_users (username, password, default_hostgroup, active)
 VALUES ('keymgr_user', 'VsjX5nEcvymRaJ36', 10, 1);
 INSERT INTO mysql_users (username, password, default_hostgroup, active) 
 VALUES ('seaweedfs', 'yNh2fD5HnRmUT4xg', 10, 1);
-# 即时生效
+# 新增 auth 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('auth_v1_prod_user', 'w8Qc1KkVS9gGKCnX', 10, 1);
+# 新增 nrs 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('nrs_v1_prod_user', 'LT9s454sNH4RNSso', 10, 1);
+# 新增 nid 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('nid_v1_prod_user', 'fNtzcyVXYUdUs5pb', 10, 1);
+# 新增 print_card 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('print_card_prod_user', 'pqQJQEMgpx5cDaj3', 10, 1);
+# 新增 powerjob 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('powerjob_prod_user', 'NCzTmZxRbSfPND4y', 10, 1);
+# 新增 ejbca_prod 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('ejbca_prod_user', 'Ek5VrU9eHEuq2mqu', 10, 1);
+# 新增 ejbca_prod 用户
+INSERT INTO mysql_users (username, password, default_hostgroup, active) 
+VALUES ('grafana_user', '8Ke59lHREvaYipKp', 10, 1);
+
+# 即时生效（必须执行,3个节点自动同步）
 LOAD MYSQL USERS TO RUNTIME;
 SAVE MYSQL USERS TO DISK;
 ```

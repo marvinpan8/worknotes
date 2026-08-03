@@ -52,6 +52,19 @@ cat /etc/hostname
 10.10.10.105 app105
 ```
 
+### 所有节点修改时区
+
+```properties
+sudo timedatectl set-timezone Africa/Conakry
+sudo timedatectl show --property=Timezone --value | sudo tee /etc/timezone
+# 验证
+timedatectl
+cat /etc/timezone
+date
+```
+
+
+
 # 下载k0s(所有节点)
 
 ```properties
@@ -540,6 +553,12 @@ sudo ipvsadm -Ln
 ```properties
 sudo k0s kubectl -n kube-system exec calico-node-cbpfh -- calico-node -show-status
 #----------------------------------------------------------------
+# bird v4 BGP peers   全局的（交换机）
++--------------+-----------+-------+------------+-------------+
+| PEER ADDRESS | PEER TYPE | STATE |   SINCE    |  BGPSTATE   |
++--------------+-----------+-------+------------+-------------+
+| 10.10.10.1   | Global    | up    | 2026-07-07 | Established |
+
 # 修正后没有 tunl0 br-a86b7966e6a1
 bird v4 routes
 +-------------------+--------------+-----------+-------------------+---------+
@@ -1358,14 +1377,23 @@ kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboar
 
 ---
 
-## 六、部署httpbin检查
+## 部署httpbin检查
 
 ```properties
 curl http://httpbin:8000/get?show_env=true
 curl http://10.10.10.128:8000/get?show_env=true
 ```
 
+## 校验dns
 
+```properties
+kubectl -n httpbin run dns-tools --image=192.168.1.118:80/infoblox/dnstools --rm -it --restart=Never
+
+nslookup api.develop.ekemp.com.cn
+nslookup api-internal.develop.ekemp.com.cn
+dig api.develop.ekemp.com.cn
+dig api-internal.develop.ekemp.com.cn
+```
 
 
 

@@ -50,6 +50,8 @@ RUN apt-get -y update \
 ```properties
 docker build -t 192.168.1.118:80/ekemp/luna-pci-client:10.9.1 --build-arg MIN_CLIENT=610-000401-015_SW_Linux_Luna_Minimal_Client_V10.9.1_RevA .
 ```
+
+
 ## 构建 keymanager docker
 
 ```properties
@@ -99,12 +101,53 @@ par con
 exit
 ```
 
-### k8s 代理验证swagger
+## 部署执行keygen
+
+```properties
+docker run -it --rm --name test -u ekemp --device=/dev/k7pf0 --entrypoint "/bin/bash" 10.10.10.102:5000/ekemp/keys-generator:1.2.0.1
+
+java -Dloader.path=/usr/local/luna/jsp -Dfile.encoding=UTF-8 -Dspring.profiles.active=prod -jar keys-generator-1.2.0.1.jar
+```
+
+## k8s 代理验证swagger
 
 ```properties
 # 到 102 节点 执行
-kubectl -n ekemp port-forward --address 10.10.10.102 keymanager-755cbb5c68-w6sf9 8088:8088
+kubectl -n gin-prod port-forward --address 10.10.10.102 keymanager-59455bd87b-5fwcg 8088:8088
+# 到 104 节点 执行
+kubectl -n gin-prod port-forward --address 10.10.10.104 keymanager-59455bd87b-5fwcg 8088:8088
 ```
+
+## 删除key
+
+```properties
+# 单单进入容器
+docker run -it --rm --name test -u ekemp --device=/dev/k7pf0 --entrypoint "/bin/bash" 10.10.10.102:5000/ekemp/keys-generator:1.2.0.1
+# 拷贝 RemoveKeyReal.class
+docker cp RemoveKeyReal.class test:/home/ekemp
+# 执行删除，args 是 label(id),可以有多个
+java -cp .:/usr/local/luna/jsp/LunaProvider.jar RemoveKeyReal 122e2054-9402-40d4-8037-049a83e33c77
+```
+
+## 更新用户组 hsmusers GID
+
+```properties
+# 检查 GID 1002 是否可用
+getent group 1002
+# 修改 GID：
+sudo groupmod -g 1002 hsmusers
+# 更新文件所有权（如果有文件属于该组）
+sudo find /dev/k7pf0 -gid 986 -exec chgrp 1002 {} \;
+# 验证修改：
+getent group hsmusers
+id ekemp
+```
+
+
+
+
+
+
 
 
 

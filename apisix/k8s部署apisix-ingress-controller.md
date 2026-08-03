@@ -158,6 +158,14 @@ kubectl delete ns ingress-apisix
 ```properties
 cd /k0s/apisix/ssl/develop.ekemp.com.cn
 kubectl -n kubernetes-dashboard create secret generic ekemp-tls-secret --from-file=cert=tls.crt --from-file=key=tls.key
+# 生产环境
+kubectl -n kubernetes-dashboard create secret generic ginnid-prod-tls --from-file=cert=fullchain.cer --from-file=key=nidgn.multimediagloryguinee.com.key
+kubectl -n kubernetes-dashboard create secret generic ginnrs-prod-tls --from-file=cert=fullchain.cer --from-file=key=nrsgn.multimediagloryguinee.com.key
+kubectl -n kubernetes-dashboard create secret generic ginmes-prod-tls --from-file=cert=fullchain.cer --from-file=key=mes.multimediagloryguinee.com.key
+
+kubectl -n kubernetes-dashboard create secret generic ejbca-ce-tls --from-file=cert=fullchain.cer --from-file=key=ejbca.multimediagloryguinee.com.key
+
+kubectl -n kubernetes-dashboard create secret generic ejbca-ce-tls --from-file=cert=fullchain.cer --from-file=key=dev.ginnid.multimediagloryguinee.com.key
 ```
 ### 2. 创建 ApisixTls 资源
 

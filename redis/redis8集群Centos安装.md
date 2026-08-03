@@ -1,4 +1,4 @@
-# redis8集群安装
+# redis8集群Centos安装
 
 ```properties
 cd /k0s/redis

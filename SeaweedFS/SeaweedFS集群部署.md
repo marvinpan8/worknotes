@@ -1,6 +1,6 @@
 # SeaweedFS 集群部署
 
-- **版本：4.18**
+- **版本：4.40**
 - wiki: https://github.com/seaweedfs/seaweedfs/wiki
 - 存储比较：https://zhuanlan.zhihu.com/p/2001768773124899011
 
@@ -15,7 +15,7 @@
 | **S3** | **8333/8181(iceberg)** |    18333      |
 | **prometheus** | **9327/9328/9329/9330** |          |
 
-## 一、硬件配置
+## ■■■ 一、硬件配置
 
 - **因20T大容量磁盘，故下载 full large disk 最新版本** [linux_amd64_full_large_disk.tar.gz](https://github.com/seaweedfs/seaweedfs/releases/download/4.18/linux_amd64_full_large_disk.tar.gz)
 
@@ -103,7 +103,7 @@ ulimit -n
 
 
 
-## 二、 Master 启动命令
+## ■■■ 二、 Master 启动命令
 
 **在 101、102、103上执行**（3台Master高可用）：
 
@@ -183,7 +183,7 @@ WantedBy=multi-user.target
 EOF
 ```
 
-#### 验证是否安装成功
+#### 验证
 ```properties
 sudo systemctl daemon-reload && sudo systemctl start weed-master
 sudo systemctl enable weed-master
@@ -194,7 +194,8 @@ sudo systemctl status weed-master
 journalctl -f -u weed-master
 tail -f -n 500 /var/log/syslog
 sudo netstat -tunlp|grep 9333
-# 验证检查
+
+# 集群验证
 curl http://10.10.10.102:9333/cluster/status?pretty=y
 # 查看集群容量和 Volume 分布情况
 curl http://10.10.10.102:9333/dir/status?pretty=y
@@ -213,7 +214,7 @@ volume.list
 
 
 
-## 三、Volume 启动
+## ■■■ 三、Volume 启动
 
 - 所有节点
 
@@ -226,13 +227,14 @@ rack=rackB
 dir=/weed/vol1
 dir.idx=/data/weed/vol1
 port=8080
+port.grpc=18080
 metricsPort=9328
 dataCenter=dc1
 master=10.10.10.101:9333,10.10.10.102:9333,10.10.10.103:9333
 max=2400
 disk=hdd
 minFreeSpace=5
-whiteList=10.10.10.0/24
+whiteList=10.10.10.0/24,10.10.20.0/24,10.244.0.0/16
 index=leveldbMedium
 index.leveldbTimeout=168
 compactionMBps=20
@@ -247,13 +249,14 @@ rack=rackB
 dir=/weed/vol2
 dir.idx=/data/weed/vol2
 port=8081
+port.grpc=18081
 metricsPort=9329
 dataCenter=dc1
 master=10.10.10.101:9333,10.10.10.102:9333,10.10.10.103:9333
 max=2400
 disk=hdd
 minFreeSpace=5
-whiteList=10.10.10.0/24
+whiteList=10.10.10.0/24,10.10.20.0/24,10.244.0.0/16
 index=leveldbMedium
 index.leveldbTimeout=168
 compactionMBps=20
@@ -278,7 +281,7 @@ EOF
 | **compactionMBps**   | **20（HDD推荐）** | 限制压缩速度，避免占满HDD带宽                        |
 | **readBufferSizeMB** | **16**          | 读缓冲区大小（MB），机械盘可调高                     |
 | **minFreeSpace** | **5**          | 磁盘剩余空间%，少于该值时整个Volume Server变为只读                  |
-| **whiteList** | **10.10.10.0/24** | 白名单                  |
+| **whiteList** | **10.10.10.0/24,10.244.0.0/16** | 白名单                  |
 
 
 ### weed-volume.service
@@ -350,7 +353,7 @@ WantedBy=multi-user.target
 EOF
 ```
 
-#### 验证是否安装成功
+#### 验证
 ```properties
 sudo systemctl daemon-reload 
 sudo systemctl start weed-vol1 weed-vol2
@@ -383,9 +386,11 @@ weed download -h
 
 
 
-## 四、Filer 启动
+## ■■■ 四、Filer + S3 启动
 
-**建议在 104 和 105 上运行**（2个Filer实现高可用）：
+**【201  202  203】  **（2个Filer即可实现高可用）
+
+- **独立节点部署，不与k8s节点部署在一起，以免挂载PVC异常**
 
 ### 创建 MySQL 数据库表
 
@@ -456,7 +461,7 @@ encryptVolumeData=true
 downloadMaxMBps=50
 s3=true
 s3.port=8333
-s3.port.iceberg=0
+s3.port.iceberg=8181
 s3.config=/etc/seaweedfs/s3.json
 s3.allowDeleteBucketNotEmpty=false
 s3.iam=true
@@ -468,15 +473,16 @@ EOF
 
 | 参数                 | 值                | 说明                                                 |
 | -------------------- | ----------------- | ---------------------------------------------------- |
-| **defaultReplicaPlacement**  | **001**            | 必须设为 011，与 Master 配置保持一致                      |
+| **defaultReplicaPlacement**  | **011**           | 必须设为 011，与 Master 配置保持一致                      |
 | **encryptVolumeData**   | **true** | 加密 Volume 数据                        |
 | **s3.encryptVolumeData** | **false**     | 不加密，与 filer API 一致 |
 | **s3.allowDeleteBucketNotEmpty** | **false**          | 允许删除非空 Bucket                    |
-| **s3.port.iceberg** | **0**          | 禁用iceberg端口                   |
+| **s3.port.iceberg** | **8181（默认）**  | iceberg端口（0 是禁用）            |
 | **downloadMaxMBps** | **50** | 单请求下载限速（MB/s）                  |
 
-
 ### weed-filer.service
+
+- mkdir /opt/seaweedfs
 
 ```properties
 sudo vim /etc/systemd/system/weed-filer.service
@@ -513,16 +519,17 @@ WantedBy=multi-user.target
 EOF
 ```
 
-### 验证检查
+### 验证
 ```properties
 # 再次检查 数据库配置文件
 sudo cat /etc/seaweedfs/filer.toml 
 # 启动
+sudo systemctl enable weed-filer
+sudo systemctl disable weed-filer
+sudo systemctl is-enabled weed-filer
+
 sudo systemctl daemon-reload 
 sudo systemctl start weed-filer
-
-sudo systemctl enable weed-filer
-sudo systemctl is-enabled weed-filer
 sudo systemctl stop weed-filer
 # 查看日志文件
 sudo systemctl status weed-filer
@@ -549,38 +556,81 @@ iostat -x 5
 # 如果 %util < 70%，可适当调高,ompactionMBps=80
 
 # weed shell 查看
-weed shell
+weed shell -master=10.10.10.101:9333
+# 检查集群网络连通性
+> cluster.check 
+# 检查集群进程状态
+> cluster.ps
+# 列出卷
 > volume.list
-# 手动垃圾回收
-> volume.vacuum
+
 # 每周执行数据完整性检查
 > volume.fsck -collection=all
+# 先模拟运行，找出Filer元数据中已经不存在的文件条目
+> volume.fsck
+# 如果确认找到的孤儿数据都需要删除，执行清理
+> volume.fsck -reallyDeleteFromVolume
+
+# 手动垃圾回收,物理数据清理
+> volume.vacuum
+> volume.vacuum -volumeId XXX
+# 删除空卷
+> volume.deleteEmpty -apply
+
+# 查看目录
+> fs.ls -l -a /topics
+# 创建 匿名用户，指定 s3桶
+> s3.bucket.access -name test-bucket -user anonymous -access Read,List
+# 查看匿名用户权限
+> s3.bucket.access -name test-bucket -user anonymous
+# 删除 匿名用户，指定 s3桶
+> s3.bucket.access -name test-bucket -user anonymous -access none
 ```
+
+### MySQL  filemeta 查看
+
+```properties
+# 哪些目录占用了大量空间?
+SELECT directory, COUNT(*) as file_count FROM filemeta GROUP BY directory ORDER BY file_count DESC LIMIT 20;
+```
+
+
+
+
 
 ### 测试S3
 
 ```properties
+sudo snap install aws-cli --classic
+aws --version
 # 配置 AWS CLI 使用测试凭证
-export AWS_ACCESS_KEY_ID=fe550f06-7bcc-4d16-a584-55b05a5f2403
-export AWS_SECRET_ACCESS_KEY=aa69b568-e38f-4e76-9c74-c4af2a7d8f65
-# 测试访问（不再需要 --no-sign-request）
-aws --endpoint-url http://10.10.10.105:8333 s3 ls
+aws configure list
+aws configure
+-------------------------
+AWS Access Key ID [None]: fe550f06-7bcc-4d16-a584-55b05a5f2403
+AWS Secret Access Key [None]: aa69b568-e38f-4e76-9c74-c4af2a7d8f65
+Default region name [None]: us-east-1
+Default output format [None]: json
 
+# 测试访问（不再需要 --no-sign-request）
+aws --endpoint-url http://10.10.10.66:9333 s3 ls
 # 创建桶
-aws --endpoint-url http://10.10.10.105:8333 s3 mb s3://test-bucket
+aws --endpoint-url http://10.10.20.201:8333 s3 mb s3://loki-data
 # 上传文件
 echo "test" > test.txt
-aws --endpoint-url http://10.10.10.105:8333 s3 cp test.txt s3://test-bucket/
+aws --endpoint-url http://10.10.20.201:8333 s3 cp test.txt s3://loki-data/
 # 列出文件
-aws --endpoint-url http://10.10.10.105:8333 s3 ls s3://test-bucket/
+aws --endpoint-url http://10.10.20.201:8333 s3 ls s3://loki-data/
 # 查看 s3 元数据
-aws --endpoint-url http://10.10.10.105:8333 s3api head-object --bucket test-bucket --key test.txt
+aws --endpoint-url http://10.10.20.201:8333 s3api head-object --bucket test-bucket --key test.txt
 
 # 清理文件，查看 mysql，删除记录了
-aws --endpoint-url http://10.10.10.105:8333 s3 rm s3://test-bucket/test.txt
+aws --endpoint-url http://10.10.20.201:8333 s3 rm s3://loki-data/test.txt
 # 清理文件，查看 mysql，删除表了
-aws --endpoint-url http://10.10.10.105:8333 s3 rb s3://test-bucket
+aws --endpoint-url http://10.10.20.201:8333 s3 rb s3://loki-data
 ```
+
+### ■■■ S3 高可用查看另一篇【Haproxy-keepalived部署】
 
 ###  查看实际存储磁盘
 
@@ -591,15 +641,15 @@ Fid 由三个部分组成 【VolumeId, NeedleId, Cookie】
 - Cookie: 187c8fdb 32bit Cookie值，为了安全起见，防止恶意攻击。
 
 ```properties
-# 1. 查询 filer 元数据， 查看 fid.volume_id = 8; file_id = 8,1298c2d7e7
-curl -H "Accept: application/json" "http://10.10.10.105:8888/buckets/test-bucket/test2.txt?metadata=true&pretty=y"
+# 1. 查询 filer 元数据， 查看 fid.volume_id = 7; file_id = 7,1470f5a1a4
+curl -H "Accept: application/json" "http://10.10.10.105:8888/buckets/test-bucket/test.txt?metadata=true&pretty=y"
 # 2. 向 Master 查询 volumeId = 7 所在Volume 即 物理磁盘位置 102 102 104
 curl "http://10.10.10.101:9333/dir/lookup?volumeId=7&pretty=y"
 # 3. 根据以上所在 Volume 查看Collection 和 FileCount 
 curl "http://10.10.10.102:8080/status?pretty=y"
 {
-      "Id": 8,
-      "Size": 45,
+      "Id": 7,
+      "Size": 27,
       "ReplicaPlacement": {
         "node": 1,
         "rack": 1
@@ -632,13 +682,86 @@ sudo ls -l /weed/vol2
 
 
 
-## 五、删除卸载
+## ■■■ 五、Admin UI
+
+- **10.10.20. 201 单节点**
+- **-master：master地址，多个用逗号隔开**
+- **-dataDir: Admin UI 自身数据目录**
+- **-adminPassword: 管理员（默认admin）密码**
+### weed-admin.service
+
+```properties
+sudo mkdir /opt/seaweedfs
+sudo mkdir -p /data/weed/admin
+sudo vim /etc/systemd/system/weed-admin.service
+# 创建 weed-admin.service
+sudo tee /etc/systemd/system/weed-admin.service << EOF
+[Unit]
+Description=SeaweedFS admin Server
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/seaweedfs/seaweedfs/wiki
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+ExecStart=/usr/local/bin/weed admin -master="10.10.10.101:9333,10.10.10.102:9333,10.10.10.103:9333" -dataDir="/data/weed/admin" -adminPassword="Ekemp@2026"
+WorkingDirectory=/opt/seaweedfs
+LimitNOFILE=65535
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+
+SyslogIdentifier=weed-admin
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+### 启动验证
+```properties
+sudo systemctl daemon-reload 
+sudo systemctl start weed-admin
+
+sudo systemctl enable weed-admin
+sudo systemctl stop weed-admin
+# 查看日志文件
+sudo systemctl is-enabled weed-admin
+sudo systemctl status weed-admin
+journalctl -f -u weed-admin
+tail -f -n 500 /var/log/syslog
+sudo netstat -tunlp|grep weed
+```
+
+### 登录验证
+
+```properties
+# 用户名默认 admin / Ekemp@2026
+http://10.10.20.201:23646
+# 加速地址
+http://8.218.51.188:50015
+```
+
+
+
+
+## ■■■ 六、删除卸载
 
 1. **停止所有服务**：停止所有机器上的 Master、Volume Server、Filer 服务。
 ```properties
 sudo systemctl stop weed-filer
 sudo systemctl stop weed-vol1 weed-vol2
 sudo systemctl stop weed-master
+sudo systemctl stop weed-admin
 ```
 
 2. **清理数据目录**：
@@ -650,107 +773,15 @@ sudo rm -rf /data/weed/master/*
 sudo rm -rf /weed/vol1/* /weed/vol2/*
 # MySQL：如需彻底重置，可清理 Filer 相关的数据库表。
 DROP DATABASE seaweedfs_filer;
-CREATE DATABASE seaweedfs_filer CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 ```
 
 
 
-## 六、k8s-csi 集成
-
-获取最新版  deploy/kubernetes/seaweedfs-csi.yaml：https://github.com/seaweedfs/seaweedfs-csi-driver.git
+## ■■■ 七、升级部署
 
 ```properties
-# 替换 SEAWEEDFS_FILER 地址（两处）
-SEAWEEDFS_FILER:8888  -> 10.10.10.104:8888
-# 替换 namespace
-namespace: default  ->  namespace: kube-system
-namespace=default  ->  namespace=kube-system
-# 替换 /var/lib/kubelet 目录为 /data/kubelet
-sed 's+/var/lib/kubelet+/data/k8s/kubelet/data+g'  deploy/kubernetes/seaweedfs-csi.yaml
-# 部署执行
-kubectl apply -f deploy/kubernetes/seaweedfs-csi.yaml
-# 检查
-kubectl get po -n kube-system
-```
-
-### 测试
-
-```properties
-kubectl apply -f deploy/kubernetes/sample-seaweedfs-pvc.yaml
-# 查看 volumeName: pvc-d620b253-dd28-46cd-b8ad-fb765a891b2a
-kubectl get pvc
-kubectl apply -f deploy/kubernetes/sample-busybox-pod.yaml
-kubectl exec my-csi-app -- df -h
-#-------------------------------------------------------
-10.10.10.104:8888:/buckets/pvc-d620b253-dd28-46cd-b8ad-fb765a891b2a
-                          1.1P         0      1.1P   0% /data
-```
-
-
-
-### 动态配置
-
-默认情况下，驱动程序会为每个请求创建单独的文件夹（`/buckets/<volume-id>`）并使用单独的集合（`volume-id`），默认StorageClass： seaweedfs-storage
-
-有时我们需要使用确切的**集合名称**或更改**复制选项**。这可以通过创建带有相应选项的单独存储类来实现：
-
-```properties
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: seaweedfs-special
-provisioner: seaweedfs-csi-driver
-parameters:
-  collection: mycollection
-  replication: "011"
-  diskType: "hdd"
-```
-
-### 静态配置
-
-还有一种使用场景是，我们需要从不同的 Pod 访问**同一个文件夹**，并且需要拥有只读/读写权限。在这种情况下，我们**不需要额外的 StorageClass，只需要创建 PersistentVolume 即可（不需要 namespace）**：
-
-```properties
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: seaweedfs-static
-spec:
-  accessModes:
-  - ReadWriteMany
-  capacity:
-    storage: 100Mi
-  csi:
-    driver: seaweedfs-csi-driver
-    # volumeHandle: /buckets/pvc-d620b253-dd28-46cd-b8ad-fb765a891b2a
-    volumeHandle: seaweedfs-static-dfs-test
-    volumeAttributes:
-      collection: seaweedfs-static-test
-      replication: "011"
-      path: /test/temp
-      diskType: "hdd"
-    readOnly: true
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: seaweedfs-storage
-  volumeMode: Filesystem
-```
-
-**并将其绑定到指定 namespace 的 PersistentVolumeClaim：**
-
-```properties
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: seaweedfs-static
-  namespace: ekemp
-spec:
-  storageClassName: seaweedfs-storage
-  volumeMode: Filesystem
-  volumeName: seaweedfs-static
-  accessModes:
-  - ReadWriteMany
-  resources:
-    requests:
-      storage: 1Gi
+# 停止所有服务
+sudo mv weed /usr/local/bin/
+# 启动所有服务
 ```
 

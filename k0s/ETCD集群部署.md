@@ -268,7 +268,10 @@ tail -f /var/log/messages
 # 验证集群
 
 ```properties
+# 查看成员静态信息（不含leader）
 etcdctl --cacert=/k8s/etcd/ssl/ca.pem --cert=/k8s/etcd/ssl/client-cert.pem --key=/k8s/etcd/ssl/client-key.pem --endpoints="https://10.10.20.201:2379,https://10.10.20.202:2379,https://10.10.20.203:2379"  -w table member list
+# 查看集群动态状态（含leader）
+etcdctl --cacert=/k8s/etcd/ssl/ca.pem --cert=/k8s/etcd/ssl/client-cert.pem --key=/k8s/etcd/ssl/client-key.pem --endpoints="https://10.10.20.201:2379,https://10.10.20.202:2379,https://10.10.20.203:2379" -w table endpoint status --cluster
 --------------------
 endpoint health
 
