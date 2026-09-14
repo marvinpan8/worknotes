@@ -126,13 +126,13 @@ docker compose up -d
 ### 验证检查
 ```properties
 # 验证集群
-curl http://localhost:9333/cluster/status?pretty=y
+curl http://192.168.1.118:9333/cluster/status?pretty=y
 # 查看集群容量和 Volume 分布情况
-curl http://localhost:9333/dir/status?pretty=y
+curl http://192.168.1.118:9333/dir/status?pretty=y
 # 查看所有 Volume 的详细信息（ID、大小、副本策略等）
-curl http://localhost:9333/vol/status?pretty=y
+curl http://192.168.1.118:9333/vol/status?pretty=y
 # 检查 单个 Volume 状态
-curl http://localhost:8080/status?pretty=y
+curl http://192.168.1.118:8080/status?pretty=y
 
 # 测试上传 副本策略 000
 curl "http://localhost:9333/dir/assign?replication=000"

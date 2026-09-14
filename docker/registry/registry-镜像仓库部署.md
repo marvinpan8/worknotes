@@ -1,6 +1,6 @@
 # registry-k8s 镜像仓库部署
 
-docker hub：https://hub.docker.com/_/registry
+docker hub：https://hub.docker.com/registry
 
 GitHub: https://github.com/distribution/distribution
 

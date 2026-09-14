@@ -1,6 +1,8 @@
-# zot-k8s 镜像仓库部署
+# zot-k8s 镜像仓库helm部署
 
-官网：https://zotregistry.dev/v2.1.15/install-guides/install-guide-k8s/
+**版本：v2.1.20**
+
+官网：https://zotregistry.dev/v2.1.20/install-guides/install-guide-k8s/  
 
 GitHub: https://github.com/project-zot/zot
 
@@ -110,7 +112,7 @@ pvc:
   storageClassName: seaweedfs-storage
 ```
 
-- storage.rootDirectory: **本地**目录，存放缓存数据库（如 bolt.db）和临时文件
+- storage.rootDirectory: **本地目录**，存放缓存数据库（如 bolt.db）和临时文件
 - storage.storageDriver.rootdirectory: **S3 存储桶内**的路径前缀，所有镜像数据存于此路径下
 - storageClassName: nfs-client
 
@@ -127,7 +129,7 @@ k create ns zot
 k label ns zot istio-injection=enabled --overwrite
 ```
 
-##  本地安装
+##  本地helm安装
 
 ```properties
 cd /k0s/zot

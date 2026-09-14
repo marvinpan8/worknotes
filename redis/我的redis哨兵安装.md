@@ -26,34 +26,34 @@ systemctl start redis && systemctl start redis-sentinel
 
 mkdir data logs
 
-```bash
+```properties
 # 修改redis配置文件：/etc/redis.conf
-# 1. 修改绑定ip为服务器内网ip地址，做绑定，三台各自填写各自的ip地址
+# 修改绑定ip为服务器内网ip地址，做绑定，三台各自填写各自的ip地址
 bind 192.168.10.214
-# 2. 保护模式修改为否，允许远程连接
+# 保护模式修改为否，允许远程连接
 protected-mode no
-# 开启作为守护进程运行，从而生成 pidfile
+# 开启作为守护进程运行，从而生成 pidfile,若是systemctl 启动改为 no
 daemonize yes
 pidfile /var/run/redis_6379.pid
-# 3. log
+# 日志
 logfile "./logs/redis.log"
 dir ./data/
-# 4. 设定密码
+# 设定密码
 requirepass zaq1xsw2
-# 5. 设定主库密码与当前库密码同步，保证从库能够提升为主库
+# 设定主库密码与当前库密码同步，保证从库能够提升为主库
 masterauth zaq1xsw2
-# 6. 关闭AOF持久化支持
+# 关闭AOF持久化支持，只在本机重启时防丢失数据
 # appendonly no
 # 优先级 80， 越小越优先
 slave-priority 80
 replica-priority 80
-#redis主从复制配置,slaves数量,网络延迟的最大值
+##redis主从复制配置,slaves数量至少要有 1 个从节点处于在线状态,从节点的复制延迟不能超过 10 秒
 min-replicas-to-write 1
 min-replicas-max-lag 10
 -------------------
 min-slaves-to-write 1
 min-slaves-max-lag 10
-# 最大内存物理内存的3/4，
+# 最大物理内存的3/4，
 # 本例：16G=17179869184 byte(B) * 3/4 = 12884901888
 # 64G=68719476736  byte(B) * 3/4 = 51539607552
 # 8G=8589934592 byte(B) * 3/4 = 6442450944
@@ -80,7 +80,7 @@ replica-priority 90
 
 mkdir logs tmp
 
-```bash
+```properties
 # 修改redis-sentinel配置文件：/etc/redis-sentinel.conf
 # 1. 绑定的地址
 bind 192.168.10.214
@@ -126,7 +126,9 @@ systemctl restart redis
 systemctl restart redis-sentinel
 ```
 
-### 高可用测试：
+
+
+## 高可用测试：
 
 #### 1. 连接redis脚本
 

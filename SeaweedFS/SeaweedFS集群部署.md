@@ -130,21 +130,23 @@ resumeState=true
 volumePreallocate=true
 raftHashicorp=true
 raftBootstrap=true
+whiteList=10.10.10.0/24,10.10.20.0/24,10.244.0.0/16
 EOF
 ```
 
 ### 关键参数说明
 
-| 参数                   | 值                    | 说明                                                         |
-| ---------------------- | --------------------- | ------------------------------------------------------------ |
-| **defaultReplication** | `011`                 | 2机架各保存1份，不同服务器保存3份副本                        |
-| **volumeSizeLimitMB**  | `51200`               | 增大到50GB，减少GC频率，对HDD友好                            |
-| **volumePreallocate**  | 启用                  | 预分配磁盘空间，减少碎片，提升顺序写入性能                   |
-| **garbageThreshold**   | `0.15`                | **已删除数据占比超过阈值时，触发 Compact,并配合volume -compactionMBps 限速** |
-| peers                  | 3个Master地址         | 形成Raft集群，实现高可用                                     |
-| mdir                   |                       | 元数据存储目录                                               |
-| metricsPort            | 9327                  | prometheus 监控端口                                          |
-| master.metrics.address | http://localhost:9091 | Prometheus gateway address                                   |
+| 参数                   | 值            | 说明                                                         |
+| ---------------------- | ------------- | ------------------------------------------------------------ |
+| **defaultReplication** | `011`         | 2机架各保存1份，不同服务器保存3份副本                        |
+| **volumeSizeLimitMB**  | `51200`       | 增大到50GB，减少GC频率，对HDD友好                            |
+| **volumePreallocate**  | 启用          | 预分配磁盘空间，减少碎片，提升顺序写入性能                   |
+| **garbageThreshold**   | `0.15`        | **已删除数据占比超过阈值时，触发 Compact,并配合volume -compactionMBps 限速** |
+| peers                  | 3个Master地址 | 形成Raft集群，实现高可用                                     |
+| mdir                   |               | 元数据存储目录                                               |
+| metricsPort            | 9327          | prometheus 监控端口                                          |
+| metricsIp              | 同 ip         | prometheus 监控地址                                          |
+| **whiteList** | **10.10.10.0/24,10.244.0.0/16** | 白名单                  |
 
 ### weed-master.service
 
@@ -185,9 +187,11 @@ EOF
 
 #### 验证
 ```properties
-sudo systemctl daemon-reload && sudo systemctl start weed-master
+sudo systemctl daemon-reload 
 sudo systemctl enable weed-master
 sudo systemctl is-enabled weed-master 
+
+sudo systemctl start weed-master
 sudo systemctl stop weed-master
 # 查看日志文件
 sudo systemctl status weed-master
@@ -210,6 +214,34 @@ cluster.check
 cluster.ps
 # 列出集群volume server
 volume.list   
+```
+
+### 日志(master自动维护指令)
+
+- **master 启动日志**
+
+```properties
+# 清理Filer元数据日志。防止 .system/log 目录下的元数据变更日志无限增长，占用存储空间。
+fs.log.purge -daysAgo=7
+# 当有Volume 服务宕机或数据丢失时，它会自动将数据复制到其他节点，确保每个卷的副本数满足设定的复制策略011
+volume.fix.replication -apply
+# 清理24小时前就开始但未完成的S3 API中因客户端中断或失败而残留的垃圾数据，释放存储空间
+s3.clean.uploads -timeAgo=24h
+#（我添加）
+volume.balance -apply
+volume.deleteEmpty -quietFor=24h -apply
+
+[master.maintenance]
+# periodically run these scripts are the same as running them from 'weed shell'
+# 当 admin 服务器已连接时，脚本将被跳过。(新版本在 admin 和 worker 服务执行)
+scripts = """
+  lock
+  fs.log.purge -daysAgo=7
+  volume.fix.replication -apply
+  s3.clean.uploads -timeAgo=24h
+  unlock
+"""
+sleep_minutes = 17          # 执行周期 17分钟
 ```
 
 
@@ -404,7 +436,7 @@ GRANT ALL PRIVILEGES ON seaweedfs_filer.* TO 'seaweedfs'@'10.10.20.20_';
 FLUSH PRIVILEGES;
 ```
 
-### 创建 `filer.toml` 配置数据库文件
+### `filer.toml` 配置数据库文件
 
 ```properties
 # 创建模板配置文件
@@ -415,7 +447,7 @@ sudo cp /k0s/weed/config/filer.toml /etc/seaweedfs/
 sudo vim /etc/seaweedfs/filer.toml 
 ```
 
-### 创建 s3.json
+###  s3.json
 
 ```properties
 sudo tee /etc/seaweedfs/s3.json << EOF
@@ -533,7 +565,7 @@ sudo systemctl start weed-filer
 sudo systemctl stop weed-filer
 # 查看日志文件
 sudo systemctl status weed-filer
-journalctl -f -u weed-filer
+journalctl -f -n 500 -u weed-filer
 tail -f -n 500 /var/log/syslog
 sudo netstat -tunlp|grep weed
 
@@ -575,7 +607,7 @@ weed shell -master=10.10.10.101:9333
 > volume.vacuum
 > volume.vacuum -volumeId XXX
 # 删除空卷
-> volume.deleteEmpty -apply
+> volume.deleteEmpty -quietFor=24h -apply
 
 # 查看目录
 > fs.ls -l -a /topics
@@ -592,11 +624,11 @@ weed shell -master=10.10.10.101:9333
 ```properties
 # 哪些目录占用了大量空间?
 SELECT directory, COUNT(*) as file_count FROM filemeta GROUP BY directory ORDER BY file_count DESC LIMIT 20;
+# .system/log
+SELECT DISTINCT t.directory FROM `filemeta` t where t.directory like '/topics/.system/log/2026%'
 ```
 
-
-
-
+- **default 系统日志在volume-id = 223、224、231、232 **
 
 ### 测试S3
 
@@ -682,13 +714,49 @@ sudo ls -l /weed/vol2
 
 
 
-## ■■■ 五、Admin UI
+## ■■■ 五、删除卸载
+
+1. **停止所有服务**：停止所有机器上的 Master、Volume Server、Filer 服务。
+```properties
+sudo systemctl stop weed-filer
+sudo systemctl stop weed-vol1 weed-vol2
+sudo systemctl stop weed-master
+sudo systemctl stop weed-admin
+```
+
+2. **清理数据目录**：
+
+```properties
+# Master：删除 -mdir 参数指定的目录下的所有内容。
+sudo rm -rf /data/weed/master/*
+# Volume Server：删除 -dir 参数指定的所有目录下的内容。
+sudo rm -rf /weed/vol1/* /weed/vol2/*
+# MySQL：如需彻底重置，可清理 Filer 相关的数据库表。
+DROP DATABASE seaweedfs_filer;
+```
+
+## ■■■ 六、升级部署
+
+```properties
+# 停止所有服务
+sudo mv weed /usr/local/bin/
+# 启动所有服务
+```
+
+
+
+---
+
+# ■■■ 五、Admin UI
 
 - **10.10.20. 201 单节点**
 - **-master：master地址，多个用逗号隔开**
 - **-dataDir: Admin UI 自身数据目录**
 - **-adminPassword: 管理员（默认admin）密码**
-### weed-admin.service
+
+> 注意：启动了此服务，原master服务配置的定时清理脚本任务将停止。在 Default Workers的Admin Script 界面周期执行，但需要部署 worker 进程
+
+## weed-admin.service
 
 ```properties
 sudo mkdir /opt/seaweedfs
@@ -751,37 +819,114 @@ http://10.10.20.201:23646
 http://8.218.51.188:50015
 ```
 
+## weed-worker-default.service
 
+- **【202】**
 
-
-## ■■■ 六、删除卸载
-
-1. **停止所有服务**：停止所有机器上的 Master、Volume Server、Filer 服务。
 ```properties
-sudo systemctl stop weed-filer
-sudo systemctl stop weed-vol1 weed-vol2
-sudo systemctl stop weed-master
-sudo systemctl stop weed-admin
+sudo mkdir -p /data/weed/worker/default
+sudo vim /etc/systemd/system/weed-worker.service
+# 创建 weed-worker.service
+sudo tee /etc/systemd/system/weed-worker.service << EOF
+[Unit]
+Description=SeaweedFS worker default Server
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/seaweedfs/seaweedfs/wiki
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+ExecStart=/usr/local/bin/weed worker -admin=10.10.20.201:23646 -jobType=default -workingDir=/data/weed/worker/default -id=worker-default
+WorkingDirectory=/data/weed/worker/default
+LimitNOFILE=65535
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+
+SyslogIdentifier=weed-worker
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
 ```
 
-2. **清理数据目录**：
+## weed-worker-heavy.service
+
+- **【203】**
 
 ```properties
-# Master：删除 -mdir 参数指定的目录下的所有内容。
-sudo rm -rf /data/weed/master/*
-# Volume Server：删除 -dir 参数指定的所有目录下的内容。
-sudo rm -rf /weed/vol1/* /weed/vol2/*
-# MySQL：如需彻底重置，可清理 Filer 相关的数据库表。
-DROP DATABASE seaweedfs_filer;
+sudo mkdir -p /data/weed/worker/heavy
+sudo vim /etc/systemd/system/weed-worker.service
+# 创建 weed-worker.service
+sudo tee /etc/systemd/system/weed-worker.service << EOF
+[Unit]
+Description=SeaweedFS worker heavy Server
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/seaweedfs/seaweedfs/wiki
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+ExecStart=/usr/local/bin/weed worker -admin=10.10.20.201:23646 -jobType=heavy -workingDir=/data/weed/worker/heavy -id=worker-heavy
+WorkingDirectory=/data/weed/worker/heavy
+LimitNOFILE=65535
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+
+SyslogIdentifier=weed-worker
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
 ```
 
+### 启动验证
+```properties
+sudo systemctl daemon-reload 
+sudo systemctl enable weed-worker
+sudo systemctl is-enabled weed-worker
 
+sudo systemctl start weed-worker
+sudo systemctl stop weed-worker
+# 查看日志文件
+sudo systemctl status weed-worker
+journalctl -f -u weed-worker
+tail -f -n 500 /var/log/syslog
+sudo netstat -tunlp|grep weed
+```
 
-## ■■■ 七、升级部署
+## 禁用EC
+
+在【**Default Workers**】中选择【**EC Encoding**】和【**EC Share Balance**】
+
+关闭【**Enabled**】后【**Save Config**】
+
+## 运维
 
 ```properties
-# 停止所有服务
-sudo mv weed /usr/local/bin/
-# 启动所有服务
+SELECT * FROM `filemeta` 
+# 7天
+SELECT DISTINCT t.directory FROM `filemeta` t where t.directory like '/topics/.system/log/2026%'
+# 获取最大文件数量的目录
+SELECT directory, COUNT(*) as file_count FROM filemeta GROUP BY directory ORDER BY file_count DESC LIMIT 20;
 ```
 

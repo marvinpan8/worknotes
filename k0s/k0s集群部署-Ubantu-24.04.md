@@ -201,7 +201,7 @@ spec:
         clientCertFile: /k0s/etcd/ssl/client-cert.pem
         clientKeyFile: /k0s/etcd/ssl/client-key.pem
   images:
-    repository: 10.10.10.102:80
+    repository: 10.10.10.102:5000
     default_pull_policy: IfNotPresent
     konnectivity:
       image: quay.io/k0sproject/apiserver-network-proxy-agent
@@ -440,7 +440,65 @@ sudo systemctl status k0scontroller
 
 
 
+# ■■■ CoreDNS 配置
+
+```properties
+    .:53 {
+        errors
+        health
+        ready
+        log . {
+          class error
+        }
+        template IN AAAA * {
+          rcode NXDOMAIN
+        }
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          ttl 30
+          fallthrough in-addr.arpa ip6.arpa
+        }
+        prometheus :9153
+        # forward . /etc/resolv.conf {
+        #   except stats.grafana.org.
+        # }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+```
+
 ---
+
+# ■■■ 安装krew (废弃，太复杂)
+
+- 调试网络 sniff
+- GitHub官网：https://github.com/kubernetes-sigs/krew/tags
+
+```properties
+#下载最新版本 ${KREW}.tar.gz
+tar zxvf "${KREW}.tar.gz"
+# 安装 krew， 在 /home/ekemp/.krew
+./krew-linux_amd64 install krew
+# 增加环境变量 
+vim .bashrc
+export PATH=/home/ekemp/.krew/bin:$PATH
+source .bashrc
+# 安装 sniff
+kubectl krew install sniff
+# 直接抓包，保存为文件
+kubectl sniff mimir-distributor-bbc7dd8bd-ldcln -n mimir -c distributor -p --image=10.10.10.102:5000/hamravesh/ksniff-helper:v3 --socket=/run/k0s/containerd.sock -o /tmp/capture.pcap
+
+# 删除
+kubectl krew uninstall sniff
+rm -rf ~/.krew
+# 清理 Shell 配置
+vim .bashrc
+source .bashrc
+```
+
+
 
 # ■■■ 手动删除服务
 
@@ -516,11 +574,13 @@ k0s etcd member-list
 k0s kubectl get etcdmember
 k0s kc get etcdmember
 ```
-## 查看端口路由规则 ipvs / iptables 
+## 查看端口路由规则 nftables/ipvs / iptables
 
 - **注意netstat 查询不到端口：**netstat -tunlp |grep 30443
 
 ```properties
+# nftables  
+sudo nft list ruleset | grep -i KUBE 
 # ipvs 方式
 sudo ipvsadm -Ln | grep 31180
 # iptables 方式（跳过）
@@ -544,7 +604,7 @@ sudo k0s kubectl -n kube-system exec calico-node-cbpfh -- birdcl -v
 # 查看 calico 的 bird 网络模式
 route -n
 # 输出不会出现 tunl0 或 vxlan.calico 设备
-# ipvs 方式
+# 不会出现 ipvs 方式
 sudo ipvsadm -Ln
 ```
 
@@ -676,15 +736,15 @@ cat /etc/containerd/certs.d/docker.io/hosts.toml
 - **一般不放开"push", 使用docker 专有socker的push ** 
 
 ```properties
-sudo mkdir -p /etc/containerd/certs.d/10.10.10.102:5000
+sudo mkdir -p /etc/containerd/certs.d/10.10.10.66:5000
 # 创建hosts.toml
-sudo tee /etc/containerd/certs.d/10.10.10.102:5000/hosts.toml << EOF
-server = "http://10.10.10.102:5000"
-[host."http://10.10.10.102:5000"]
+sudo tee /etc/containerd/certs.d/10.10.10.66:5000/hosts.toml << EOF
+server = "http://10.10.10.66:5000"
+[host."http://10.10.10.66:5000"]
   capabilities = ["pull", "resolve"]
 EOF
 # ----查看------------------
-cat /etc/containerd/certs.d/10.10.10.102:5000/hosts.toml
+cat /etc/containerd/certs.d/10.10.10.66:5000/hosts.toml
 ```
 
 ### 重启k0s服务生效
@@ -1277,7 +1337,7 @@ sudo tee /etc/docker/daemon.json <<EOF
       "https://docker.xuanyuan.me",
       "https://docker.tbedu.top"
    ],
-  "insecure-registries": ["10.10.10.102:80"],
+  "insecure-registries": ["10.10.10.102:5000", "10.10.10.66:5000"],
   "storage-driver": "overlayfs",
   "features": {
     "containerd-snapshotter": true

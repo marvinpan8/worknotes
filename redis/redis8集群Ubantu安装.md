@@ -1,5 +1,7 @@
 # redis8集群Ubantu安装
 
+- https://download.redis.io/releases/?C=N;O=D
+
 ```properties
 cd /k0s/redis
 tar -zxvf redis-8.6.4.tar.gz

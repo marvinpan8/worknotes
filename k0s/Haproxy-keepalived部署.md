@@ -91,6 +91,7 @@ defaults
 	timeout server 120s
 	timeout check 5s
 
+# ========== 第一组服务（S3 / SeaweedFS）==========
 frontend s3-frontend
 	bind :9333
 	# 保持与客户端的连接（Keep-Alive），但在后端响应完成后，主动关闭与后端的连接。
@@ -111,6 +112,22 @@ backend s3-backend
 	server seaweed-1 10.10.10.103:8333 check inter 3000 rise 2 fall 3
 	server seaweed-2 10.10.10.104:8333 check inter 3000 rise 2 fall 3
 	server seaweed-3 10.10.10.105:8333 check inter 3000 rise 2 fall 3
+	
+# ========== 第二组服务（新增）==========
+frontend zot-frontend
+    bind :5000
+    option http-server-close
+    option forwardfor except 127.0.0.1
+    default_backend zot-backend
+
+backend zot-backend
+    balance roundrobin
+    option http-keep-alive
+    option tcp-check
+    tcp-check connect
+    server zot-1 10.10.20.201:5000 check inter 3000 rise 2 fall 3
+    server zot-2 10.10.20.202:5000 check inter 3000 rise 2 fall 3
+    server zot-3 10.10.20.203:5000 check inter 3000 rise 2 fall 3
 
 # 监控页面
 listen admin_stats
